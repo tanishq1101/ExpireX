@@ -7,6 +7,7 @@ import { Loader2, Sparkles, Camera, Info, ScanBarcode } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { uploadItemImage } from "@/lib/storage";
+import { externalImageUrl } from "@/lib/utils";
 import { itemFormSchema, type Extraction, type ShelfLife } from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
 import { CATEGORY_META } from "@/lib/categories";
@@ -172,6 +173,18 @@ export function ItemForm({
         <div className="flex items-center gap-2 rounded-xl border border-border bg-surface/[0.04] px-3 py-2 text-xs text-muted">
           <ScanBarcode className="h-3.5 w-3.5 text-primary" />
           Barcode: <span className="font-mono text-foreground">{barcode}</span>
+        </div>
+      )}
+
+      {!file && externalImageUrl(initial.image_url) && (
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-surface/[0.04] p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={externalImageUrl(initial.image_url)!}
+            alt=""
+            className="h-14 w-14 rounded-lg border border-border object-cover"
+          />
+          <span className="text-xs text-muted">Product image attached from the barcode database.</span>
         </div>
       )}
 

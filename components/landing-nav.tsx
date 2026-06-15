@@ -98,7 +98,7 @@ export function LandingNav() {
             className="fixed inset-0 top-0 z-30 bg-background/60 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-x-3 top-[68px] z-40 animate-fade-up rounded-2xl border border-border bg-background/95 p-3 shadow-2xl backdrop-blur-xl">
+          <div className="absolute inset-x-3 top-full z-40 mt-1 animate-fade-up rounded-2xl border border-border bg-background/95 p-3 shadow-2xl backdrop-blur-xl">
             <nav className="flex flex-col">
               {NAV_LINKS.map((l) => (
                 <a

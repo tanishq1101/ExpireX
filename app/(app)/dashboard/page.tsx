@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Package, Clock, XCircle, Sparkles, PartyPopper } from "lucide-react";
+import { Package, Clock, XCircle, Sparkles, PartyPopper, ScanLine } from "lucide-react";
 import { createClient } from "@/services/supabase/server";
 import { todayKolkata, addDays } from "@/lib/dates";
 import { EXPIRING_WINDOW_DAYS, RECENT_WINDOW_DAYS } from "@/lib/status";
 import { StatCard } from "@/components/stat-card";
 import { ItemRow } from "@/components/item-row";
+import { ScanHub } from "@/components/scan-hub";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { Item } from "@/types/database";
 
@@ -36,11 +37,21 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-muted">Your expiry overview</p>
-      </div>
+      {/* Scan-first hero — the primary action the moment you land here */}
+      <section className="glass p-5 sm:p-6">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_0_24px_-6px] shadow-primary/60">
+            <ScanLine className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="text-lg font-semibold leading-tight">Add to your inventory</h1>
+            <p className="text-sm text-muted">Snap a barcode or label — we’ll do the rest.</p>
+          </div>
+        </div>
+        <ScanHub />
+      </section>
 
+      {/* Inventory overview */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total items" value={total.count ?? 0} icon={Package} />
         <StatCard
@@ -78,8 +89,6 @@ export default async function DashboardPage() {
             icon={PartyPopper}
             title="Nothing expiring soon"
             description="You're all caught up. New items you add will show here as they approach expiry."
-            actionLabel="Add an item"
-            actionHref="/items/new"
           />
         ) : (
           <ul className="space-y-2">

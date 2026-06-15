@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Camera, ImageUp, Loader2, ScanLine, X, RotateCcw } from "lucide-react";
+import { Camera, ImageUp, Loader2, ScanLine, X, RotateCcw, SwitchCamera } from "lucide-react";
 import type { Extraction } from "@/lib/validators";
 import { Button } from "@/components/ui/button";
+
+type Facing = "environment" | "user";
 
 export function ScanUploader({
   onExtracted,
@@ -20,6 +22,7 @@ export function ScanUploader({
   const [cameraOn, setCameraOn] = useState(false);
   const [starting, setStarting] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [facing, setFacing] = useState<Facing>("environment");
 
   // Release the camera when we leave the component or stop using it.
   function stopCamera() {
@@ -29,7 +32,7 @@ export function ScanUploader({
   }
   useEffect(() => () => stopCamera(), []);
 
-  async function startCamera() {
+  async function startCamera(facingMode: Facing = facing) {
     // getUserMedia needs a secure context (https or localhost).
     if (!navigator.mediaDevices?.getUserMedia) {
       toast.error("Camera needs a secure (https) connection. Upload a photo instead.");
@@ -37,8 +40,10 @@ export function ScanUploader({
     }
     setStarting(true);
     try {
+      // Stop any existing stream first (used when flipping cameras).
+      streamRef.current?.getTracks().forEach((t) => t.stop());
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } }, // rear cam on phones, webcam on laptops
+        video: { facingMode: { ideal: facingMode } }, // rear cam on phones, webcam on laptops
         audio: false,
       });
       streamRef.current = stream;
@@ -59,6 +64,12 @@ export function ScanUploader({
     } finally {
       setStarting(false);
     }
+  }
+
+  function flipCamera() {
+    const next: Facing = facing === "environment" ? "user" : "environment";
+    setFacing(next);
+    startCamera(next);
   }
 
   function capture() {
@@ -130,6 +141,14 @@ export function ScanUploader({
           <div className="relative overflow-hidden rounded-xl border border-border bg-black">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video ref={videoRef} playsInline muted className="mx-auto max-h-72 w-full object-contain" />
+            <button
+              type="button"
+              onClick={flipCamera}
+              aria-label="Flip camera"
+              className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70"
+            >
+              <SwitchCamera className="h-4 w-4" />
+            </button>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={stopCamera}>
@@ -157,7 +176,7 @@ export function ScanUploader({
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={startCamera}
+            onClick={() => startCamera()}
             disabled={starting}
             className="glass flex flex-col items-center gap-2 p-8 text-muted transition hover:border-primary/40 disabled:opacity-60"
           >

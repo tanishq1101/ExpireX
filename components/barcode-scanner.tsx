@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, ScanBarcode, X, Keyboard } from "lucide-react";
+import { Loader2, ScanBarcode, X, Keyboard, SwitchCamera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+type Facing = "environment" | "user";
 
 // Minimal type for the native Barcode Detection API (not in the TS DOM lib yet).
 type DetectedBarcode = { rawValue: string };
@@ -29,6 +31,8 @@ export function BarcodeScanner({
   const [starting, setStarting] = useState(true);
   const [cameraFailed, setCameraFailed] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [usingNative, setUsingNative] = useState(false);
+  const [facing, setFacing] = useState<Facing>("environment");
   const [code, setCode] = useState("");
 
   function cleanup() {
@@ -58,6 +62,7 @@ export function BarcodeScanner({
       });
       if (cancelled) return stream.getTracks().forEach((t) => t.stop());
       streamRef.current = stream;
+      setUsingNative(true);
       const video = videoRef.current!;
       video.srcObject = stream;
       await video.play().catch(() => {});
@@ -133,6 +138,25 @@ export function BarcodeScanner({
     finish(code);
   }
 
+  // Flip is supported on the native path (we own the stream). zxing manages its own.
+  async function flipCamera() {
+    if (!usingNative || !videoRef.current) return;
+    const next: Facing = facing === "environment" ? "user" : "environment";
+    try {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: next } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play().catch(() => {});
+      setFacing(next);
+    } catch {
+      toast.error("Couldn't switch camera.");
+    }
+  }
+
   return (
     <div className="space-y-3">
       {!cameraFailed && (
@@ -144,6 +168,16 @@ export function BarcodeScanner({
               <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-primary" />
             </div>
           </div>
+          {usingNative && !starting && (
+            <button
+              type="button"
+              onClick={flipCamera}
+              aria-label="Flip camera"
+              className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70"
+            >
+              <SwitchCamera className="h-4 w-4" />
+            </button>
+          )}
           {starting && (
             <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-white">
               <Loader2 className="h-4 w-4 animate-spin" /> Starting camera…

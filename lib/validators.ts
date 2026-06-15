@@ -40,6 +40,20 @@ export const extractionSchema = z.object({
 
 export type Extraction = z.infer<typeof extractionSchema>;
 
+// One line item parsed from a receipt photo. Receipts rarely print expiry dates, so the
+// model estimates a likely expiry from the purchase date + typical shelf life.
+export const receiptItemSchema = z.object({
+  name: z.string().min(1).max(200),
+  category: categorySchema.nullable(),
+  expiry_date: dateString.nullable(),
+  quantity: z.number().nonnegative().nullable(),
+});
+export type ReceiptItem = z.infer<typeof receiptItemSchema>;
+
+export const receiptSchema = z.object({
+  items: z.array(receiptItemSchema).max(50),
+});
+
 // Shape Gemini must return for an AI shelf-life estimate (used when no printed date is read).
 export const shelfLifeSchema = z.object({
   // estimated expiry as ISO date, or null if the model can't reason about it

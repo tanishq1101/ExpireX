@@ -1,27 +1,39 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, ScanBarcode } from "lucide-react";
+import { Loader2, ScanBarcode, Plus, Package } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
+import { useSupabaseClient } from "@/services/supabase/client";
+import { relativeLabel, todayKolkata } from "@/lib/dates";
 import type { ProductLookup, ShelfLife } from "@/lib/validators";
 import type { ItemFormInitial } from "@/components/item-form";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import { Button } from "@/components/ui/button";
+
+type Existing = { id: string; name: string; quantity: number | null; unit: string | null; expiry_date: string };
 
 export function BarcodeAdd({
   onResolved,
 }: {
   onResolved: (initial: ItemFormInitial, notice: string) => void;
 }) {
+  const router = useRouter();
+  const supabase = useSupabaseClient();
+  const { userId } = useAuth();
+
   const [busy, setBusy] = useState(false);
-  // intro -> wait for a tap before opening the camera (no surprise permission prompt)
-  const [step, setStep] = useState<"intro" | "scan" | "looking">("intro");
+  const [step, setStep] = useState<"intro" | "scan" | "looking" | "exists">("intro");
+  // When the same barcode already exists, hold the new-item data so the user can still add it fresh.
+  const [existing, setExisting] = useState<Existing | null>(null);
+  const [pending, setPending] = useState<{ initial: ItemFormInitial; notice: string } | null>(null);
 
   async function handleDetected(barcode: string) {
     setBusy(true);
     setStep("looking");
     try {
-      // 1) Identify the product from the barcode (name/brand/category).
+      // 1) Identify the product (name/brand/category/image).
       const lookupRes = await fetch(`/api/lookup?barcode=${encodeURIComponent(barcode)}`);
       const product = (await lookupRes.json()) as ProductLookup;
 
@@ -29,14 +41,13 @@ export function BarcodeAdd({
       let notice: string;
 
       if (product.found && product.name) {
-        // Prefix the brand only when it isn't already part of the product name.
         const nm = product.name;
         const br = product.brand;
-        initial.name =
-          br && !nm.toLowerCase().includes(br.toLowerCase()) ? `${br} ${nm}` : nm;
+        initial.name = br && !nm.toLowerCase().includes(br.toLowerCase()) ? `${br} ${nm}` : nm;
         if (product.category) initial.category = product.category;
+        if (product.image_url) initial.image_url = product.image_url; // auto-attach product image
 
-        // 2) The barcode can't carry a date — ask AI for a shelf-life estimate to pre-fill.
+        // 2) Barcodes carry no date — AI estimates a likely expiry.
         try {
           const estRes = await fetch("/api/estimate", {
             method: "POST",
@@ -61,6 +72,22 @@ export function BarcodeAdd({
         toast.message("Barcode saved — product not found in database");
       }
 
+      // 3) Already in inventory? Offer to bump quantity instead of duplicating.
+      const { data } = await supabase
+        .from("items")
+        .select("id,name,quantity,unit,expiry_date")
+        .eq("barcode", barcode)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        setExisting(data as Existing);
+        setPending({ initial, notice });
+        setStep("exists");
+        return;
+      }
+
       onResolved(initial, notice);
     } catch {
       toast.error("Lookup failed. Try again or enter details manually.");
@@ -70,11 +97,62 @@ export function BarcodeAdd({
     }
   }
 
+  async function incrementExisting() {
+    if (!existing) return;
+    setBusy(true);
+    try {
+      const next = (existing.quantity ?? 1) + 1;
+      const { error } = await supabase.from("items").update({ quantity: next }).eq("id", existing.id);
+      if (error) throw error;
+      toast.success(`Updated "${existing.name}" — quantity ${next}`);
+      router.push("/items");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update quantity.");
+      setBusy(false);
+    }
+  }
+
   if (step === "looking" || busy) {
     return (
       <div className="flex flex-col items-center gap-3 py-12 text-muted">
         <Loader2 className="h-7 w-7 animate-spin text-primary" />
-        <p className="text-sm">Looking up the product…</p>
+        <p className="text-sm">Working…</p>
+      </div>
+    );
+  }
+
+  if (step === "exists" && existing && pending) {
+    return (
+      <div className="space-y-4">
+        <div className="glass flex items-center gap-3 p-4">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/15 text-primary">
+            <Package className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-medium">{existing.name}</p>
+            <p className="text-xs text-muted">
+              Already in your inventory · qty {existing.quantity ?? 1} ·{" "}
+              {relativeLabel(todayKolkata(), existing.expiry_date)}
+            </p>
+          </div>
+        </div>
+        <p className="text-sm text-muted">You&apos;ve scanned this product before. Add one more, or save it as a separate entry?</p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button className="flex-1" onClick={incrementExisting}>
+            <Plus className="h-4 w-4" /> Add +1 to existing
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => onResolved(pending.initial, pending.notice)}
+          >
+            Add as new item
+          </Button>
+        </div>
+        <Button variant="ghost" className="w-full" onClick={() => setStep("intro")}>
+          Cancel
+        </Button>
       </div>
     );
   }

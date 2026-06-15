@@ -1,31 +1,30 @@
-# Smart inventory: barcode + OCR + AI estimate, ease-of-entry, legal/contact pages
+# Wave 1: scan-first dashboard + UI fixes + top scanning features
 
-Decisions (user, 2026-06-15): Barcode + OCR + AI shelf-life estimate; product DB = Open Food Facts (free).
+Decisions (2026-06-15): rear camera + flip button; scan-first screen, camera-on-tap (no auto-open). English only.
 
-## Plan
-- [ ] 1. DB: add `barcode text` column to items (Supabase migration); update prisma schema + types + validators
-- [ ] 2. services/openfoodfacts: fetch product by barcode → {name, brand, category, image}
-- [ ] 3. services/gemini: add geminiEstimateShelfLife (expiry estimate + confidence + basis)
-- [ ] 4. lib/shelf-life.ts: local fallback shelf-life table (works if Gemini fails)
-- [ ] 5. API: /api/lookup (barcode→product) and /api/estimate (name+category→expiry)
-- [ ] 6. components/barcode-scanner.tsx: camera scan via native BarcodeDetector + @zxing/browser fallback
-- [ ] 7. Rework add-item-tabs → 3 modes (Barcode / Photo / Manual); autonomous barcode→lookup→estimate→form
-- [ ] 8. item-form: barcode field, source/AI-estimate badges, "Scan date (OCR)" + "Estimate with AI", smart defaults
-- [ ] 9. Legal/contact: /privacy, /terms, /contact (detailed) + shared SiteFooter; link from landing footer; middleware public
-- [ ] 10. Verify: npm run build clean; manual-review the smart flow
-- [ ] 11. Commit + push; then list suggested future features
+## Plan (Wave 1)
+- [ ] 1. Scan-first dashboard: big centered Scan/Barcode entry; camera on tap; inventory summary below
+- [ ] 2. Camera: rear (environment) default + flip-to-front button in scanner(s)
+- [ ] 3. Receipt scanning → bulk add (Gemini multi-item + per-item AI expiry) → editable list → bulk insert
+- [ ] 4. Re-scan barcode = increment existing quantity (offer +1 vs add new)
+- [ ] 5. Auto-attach Open Food Facts product image to the item
+- [ ] 6. UI audit + fix padding/alignment/overlap across pages
+- [ ] 7. Verify build + live; commit + push
 
-## Review
-All 11 steps done and live at https://expire-x-three.vercel.app.
+## Later waves (acknowledged, not this turn)
+- Inventory depth: storage locations, opened-date/PAO, batch tracking, household sharing
+- Email digest (weekly + insight) via cron/edge fn; auto shopping list; PWA + web push
 
-- **DB**: `items.barcode text` added via Supabase migration (`crwwfkanhmlytayzqvyt`) + repo `0003_barcode.sql`; prisma schema, types/database.ts, validators all updated.
-- **Barcode lookup**: `services/openfoodfacts` queries Open Food Facts + Open Beauty/Products Facts (free, no key). Verified live against Nutella (3017620422003) → name/brand/category/image returned correctly. `/api/lookup` (auth-gated, 401 unauth confirmed).
-- **AI shelf-life**: `geminiEstimateShelfLife` + `lib/shelf-life.ts` local fallback table. `/api/estimate` tries Gemini then falls back. 401 unauth confirmed.
-- **Barcode scanner**: `components/barcode-scanner.tsx` — native `BarcodeDetector` (Chrome) with dynamic `@zxing/browser` fallback (iOS/Firefox), reticle overlay, vibrate, manual-entry fallback, proper camera cleanup. Tap-to-start gate so opening "Add item" doesn't auto-prompt the camera.
-- **Flow**: `barcode-add.tsx` orchestrates scan → lookup → AI estimate → prefilled confirm form. `add-item-tabs.tsx` now 3 modes (Barcode / Photo / Manual). `item-form.tsx` gained barcode chip, "Estimate expiry with AI", inline "Scan date from label" (reuses ScanUploader), unit datalist, qty default 1, notice banner.
-- **Legal/contact**: `/privacy`, `/terms`, `/contact` (detailed, accurate to real data flows incl. AI-estimate disclaimer), public via middleware, `SiteFooter` + `LegalPage` wrapper, `.prose` styles, contact form via mailto. Linked from landing footer. All 200 live.
-- **Landing**: added "Barcode scanning" feature + barcode copy in hero/preview.
+## Review (Wave 1 — DONE, live)
+- **Scan-first dashboard**: `components/scan-hub.tsx` (Barcode/Photo/Receipt/Manual chooser) is now the top of `/dashboard` and is the whole of `/items/new`. Camera opens on tap (chosen behaviour). Inventory stats + expiring list moved below. Removed old `add-item-tabs.tsx`.
+- **Camera**: rear (environment) default + flip-to-front button in `scan-uploader`, `barcode-scanner` (native path), and new reusable `image-capture.tsx`.
+- **Receipt → bulk add**: `geminiExtractReceipt` + `/api/receipt` + `receipt-scan.tsx` (editable rows, per-row AI-estimated expiry, bulk insert, skips rows missing a date). `receiptSchema` added.
+- **Re-scan = increment**: `barcode-add.tsx` queries existing item by barcode → offers "Add +1 to existing" vs "Add as new".
+- **Auto product image**: barcode flow stores the Open Food Facts image URL in `image_url`; `externalImageUrl()` helper renders thumbnails in item-row, detail header, and the confirm form (private storage paths still skipped — need signed URLs, a later polish).
+- **UI fixes**: unified thumbnail/tile sizes (40px), landing mobile menu now anchors `top-full` (correct when scrolled), receipt row controls aligned.
 
-Verification: `npm run build` clean (type-check + lint); Open Food Facts integration tested live; all public pages 200; all 3 API routes 401 unauthenticated (wired, not crashing). Visual QA still blocked by sandbox preview networking — user should test the scan flow signed-in on mobile Chrome.
+Verification: build clean (type+lint); OFF lookup verified live (Nutella); deployed; public pages 200; `/api/receipt|lookup|estimate` all 401 unauth; `/dashboard` 307. Visual QA still blocked by sandbox preview networking — user to eyeball signed-in on mobile.
 
-Note: `CONTACT_EMAIL` in `lib/site.ts` is set to the owner's gmail so the contact form works — change to a dedicated support inbox if preferred.
+## Next waves (not yet done)
+- Inventory depth: storage locations, opened-date/PAO, batch tracking, household sharing
+- Email digest (weekly + insight) via Supabase cron/edge fn; auto shopping list; PWA + web push

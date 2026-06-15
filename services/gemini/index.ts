@@ -3,8 +3,10 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   extractionSchema,
   shelfLifeSchema,
+  receiptSchema,
   type Extraction,
   type ShelfLife,
+  type ReceiptItem,
 } from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
 
@@ -97,6 +99,40 @@ Rules:
 - Never return a date before the base date. Be realistic, not optimistic.`;
   const result = await model().generateContent(prompt);
   return parseShelfLife(result.response.text());
+}
+
+/** Read a receipt photo and return many line items, each with an estimated expiry. */
+export async function geminiExtractReceipt(
+  imageBase64: string,
+  mimeType: string,
+  today: string
+): Promise<ReceiptItem[]> {
+  const prompt = `You read a photo of a shopping receipt and list the purchasable products on it.
+Today's date is ${today} (Asia/Kolkata). Use the receipt/purchase date if visible, else today, as the base date.
+
+Return ONLY JSON: { "items": [ { "name", "category", "expiry_date", "quantity" }, ... ] }
+For each item:
+- "name": string  (clean product name; drop prices, codes, taxes, totals, store name)
+- "category": one of [${CATEGORIES.join(", ")}] | null
+- "expiry_date": string | null  (ISO "YYYY-MM-DD"; ESTIMATE base date + typical unopened shelf life)
+- "quantity": number | null
+
+Rules:
+- Skip non-product lines (subtotal, GST, change, card, store info).
+- Perishables get short shelf lives (days); packaged/canned get months.
+- If you can't estimate an expiry, use null. Never invent product names.`;
+  const result = await model().generateContent([
+    { text: prompt },
+    { inlineData: { data: imageBase64, mimeType } },
+  ]);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.response.text());
+  } catch {
+    return [];
+  }
+  const safe = receiptSchema.safeParse(parsed);
+  return safe.success ? safe.data.items : [];
 }
 
 /** Fallback path: extract from OCR text (used when image extraction fails, after Tesseract). */
