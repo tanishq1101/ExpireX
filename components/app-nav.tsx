@@ -6,6 +6,7 @@ import { useClerk } from "@clerk/nextjs";
 import { LayoutDashboard, Package, Plus, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -28,6 +29,7 @@ export function AppNav({ email }: { email: string }) {
         </Link>
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-muted sm:inline">{email}</span>
+          <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="Sign out">
             <LogOut className="h-4 w-4" />
           </Button>
@@ -44,7 +46,7 @@ export function AppNav({ email }: { email: string }) {
               href={href}
               className={cn(
                 "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition",
-                active ? "bg-primary/15 text-primary" : "text-muted hover:bg-white/[0.05]"
+                active ? "bg-primary/15 text-primary" : "text-muted hover:bg-surface/[0.06]"
               )}
             >
               <Icon className="h-4 w-4" />

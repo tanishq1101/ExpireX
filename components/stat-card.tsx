@@ -6,7 +6,7 @@ export function StatCard({
   value,
   icon: Icon,
   tone = "text-foreground",
-  iconTone = "text-muted bg-white/[0.06]",
+  iconTone = "text-muted bg-surface/[0.08]",
 }: {
   label: string;
   value: number;
@@ -15,7 +15,7 @@ export function StatCard({
   iconTone?: string;
 }) {
   return (
-    <div className="glass p-4 transition hover:border-white/15">
+    <div className="glass p-4 transition hover:border-primary/40">
       <div className="flex items-center justify-between">
         <div className={cn("text-3xl font-bold tabular-nums", tone)}>{value}</div>
         {Icon && (

@@ -2,29 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------- Theme tokens (channel triplets so Tailwind alpha modifiers work) ----------
+   Light is the default in :root; .dark overrides. Brand is green (emerald → teal). */
 :root {
+  color-scheme: light;
+
+  --background: 244 252 248; /* mint white */
+  --foreground: 8 28 20; /* deep green-black */
+  --muted: 75 102 90; /* muted green-gray */
+  --surface: 12 40 28; /* dark tint for alpha surfaces on light bg */
+
+  --primary: 5 150 105; /* emerald-600 */
+  --primary-foreground: 255 255 255;
+  --accent: 13 148 136; /* teal-600 */
+  --accent-foreground: 255 255 255;
+
+  --success: 16 185 129;
+  --warning: 217 119 6;
+  --danger: 220 38 38;
+
+  --ring: 16 185 129;
+
+  --border: rgba(8, 28, 20, 0.1);
+  --input: rgba(8, 28, 20, 0.04);
+  --glass-bg: rgba(255, 255, 255, 0.68);
+  --glass-border: rgba(8, 28, 20, 0.08);
+}
+
+.dark {
   color-scheme: dark;
+
+  --background: 7 14 11; /* near-black with green undertone */
+  --foreground: 233 250 243;
+  --muted: 148 170 161;
+  --surface: 255 255 255; /* white tint for alpha surfaces on dark bg */
+
+  --primary: 16 185 129; /* emerald-500 */
+  --primary-foreground: 255 255 255;
+  --accent: 45 212 191; /* teal-300 */
+  --accent-foreground: 4 18 14;
+
+  --success: 52 211 153;
+  --warning: 251 191 36;
+  --danger: 248 113 113;
+
+  --ring: 16 185 129;
+
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.06);
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.09);
 }
 
 html,
 body {
-  background: #0b0b0b;
-  color: #ededed;
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+}
+
+/* hide the default disclosure triangle on <details><summary> */
+summary::-webkit-details-marker {
+  display: none;
+}
+
+* {
+  border-color: var(--border);
 }
 
 @layer components {
-  /* Glassmorphism. Blur is the expensive part on mobile, so cap it small and drop it
-     entirely on coarse-pointer / small screens — perf wins over blur per spec. */
+  /* Glassmorphism. Blur is the expensive part on mobile, so cap it and drop it
+     entirely on coarse-pointer / small screens — perf wins per spec. */
   .glass {
-    @apply rounded-2xl border border-border bg-white/[0.04];
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    border-radius: 1.25rem;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
   }
   @media (max-width: 767px), (pointer: coarse) {
     .glass {
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
-      @apply bg-white/[0.05];
     }
   }
 
@@ -35,22 +93,60 @@ body {
   }
 }
 
-/* Ambient animated background — rich on desktop, disabled on mobile / reduced-motion. */
+/* ---------- Ambient animated background — rich on desktop, calm on mobile ---------- */
 .bg-aurora {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
+  /* light mode: a gentler wash */
   background:
-    radial-gradient(40% 50% at 15% 20%, rgba(45, 125, 255, 0.18), transparent 70%),
-    radial-gradient(35% 45% at 85% 30%, rgba(34, 211, 238, 0.14), transparent 70%),
-    radial-gradient(45% 55% at 50% 90%, rgba(45, 125, 255, 0.1), transparent 70%);
+    radial-gradient(42% 50% at 12% 18%, rgba(16, 185, 129, 0.16), transparent 70%),
+    radial-gradient(38% 46% at 88% 26%, rgba(20, 184, 166, 0.14), transparent 70%),
+    radial-gradient(48% 56% at 50% 96%, rgba(34, 197, 94, 0.12), transparent 70%);
   background-size: 200% 200%;
 }
+.dark .bg-aurora {
+  background:
+    radial-gradient(42% 50% at 12% 18%, rgba(16, 185, 129, 0.22), transparent 70%),
+    radial-gradient(38% 46% at 88% 26%, rgba(20, 184, 166, 0.18), transparent 70%),
+    radial-gradient(48% 56% at 50% 96%, rgba(34, 197, 94, 0.14), transparent 70%);
+  background-size: 200% 200%;
+}
+
+/* Subtle dotted grid texture overlay */
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image: radial-gradient(rgb(var(--foreground) / 0.06) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 0%, #000 40%, transparent 100%);
+  mask-image: radial-gradient(ellipse 75% 65% at 50% 0%, #000 40%, transparent 100%);
+}
+
+/* Floating colour blobs */
+.bg-blob {
+  position: fixed;
+  z-index: -2;
+  border-radius: 9999px;
+  filter: blur(72px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
   .bg-aurora {
-    animation: gradient-pan 18s ease infinite;
+    animation: gradient-pan 20s ease infinite;
   }
 }
+@media (max-width: 767px), (prefers-reduced-motion: reduce) {
+  .bg-blob {
+    animation: none !important;
+    opacity: 0.32;
+    filter: blur(56px);
+  }
+}
+
 @keyframes gradient-pan {
   0%,
   100% {
@@ -58,5 +154,15 @@ body {
   }
   50% {
     background-position: 100% 50%;
+  }
+}
+
+/* Honour reduced-motion globally for the tailwind animation utilities too */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
