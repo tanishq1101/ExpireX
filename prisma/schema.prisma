@@ -63,6 +63,7 @@ model Item {
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   notificationLogs NotificationLog[]
+  shoppingList     ShoppingList[]
 
   @@index([userId, expiryDate])
   @@index([userId, category])
@@ -70,6 +71,24 @@ model Item {
   @@index([userId, barcode])
   @@index([expiryDate])
   @@map("items")
+}
+
+model ShoppingList {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") // Clerk user id (text)
+  name      String
+  quantity  Decimal? @db.Decimal
+  unit      String?
+  note      String?
+  source    String   @default("manual") // 'manual' | 'auto'
+  itemId    String?  @map("item_id") @db.Uuid
+  checked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  item Item? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+
+  @@index([userId, checked, createdAt(sort: Desc)])
+  @@map("shopping_list")
 }
 
 model NotificationLog {

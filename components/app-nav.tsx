@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
-import { LayoutDashboard, Package, Plus, LogOut } from "lucide-react";
+import { LayoutDashboard, Package, Plus, LogOut, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/items", label: "Items", icon: Package },
+  { href: "/shopping", label: "Shopping", icon: ShoppingCart },
 ];
 
 export function AppNav({ email }: { email: string }) {
@@ -70,7 +71,7 @@ export function AppNav({ email }: { email: string }) {
               key={href}
               href={href}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-4 text-[11px]",
+                "flex flex-col items-center gap-0.5 px-3 text-[11px]",
                 active ? "text-primary" : "text-muted"
               )}
             >
@@ -81,7 +82,7 @@ export function AppNav({ email }: { email: string }) {
         })}
         <Link
           href="/items/new"
-          className="flex flex-col items-center gap-0.5 px-4 text-[11px] text-primary"
+          className="flex flex-col items-center gap-0.5 px-3 text-[11px] text-primary"
         >
           <Plus className="h-5 w-5" />
           Add

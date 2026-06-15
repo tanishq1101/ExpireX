@@ -30,3 +30,16 @@ export interface Item {
 
 export type ItemInsert = Omit<Item, "id" | "created_at" | "updated_at">;
 export type ItemUpdate = Partial<Omit<Item, "id" | "user_id" | "created_at" | "updated_at">>;
+
+export interface ShoppingItem {
+  id: string;
+  user_id: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  note: string | null;
+  source: "manual" | "auto";
+  item_id: string | null;
+  checked: boolean;
+  created_at: string;
+}
