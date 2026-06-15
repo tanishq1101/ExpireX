@@ -3,7 +3,15 @@ import { NextResponse } from "next/server";
 
 // Landing + Clerk pages are public. /api routes self-protect (return 401), so the middleware
 // doesn't redirect them. Everything else requires a signed-in Clerk user.
-const isPublic = createRouteMatcher(["/", "/login(.*)", "/sign-up(.*)", "/api(.*)"]);
+const isPublic = createRouteMatcher([
+  "/",
+  "/login(.*)",
+  "/sign-up(.*)",
+  "/privacy",
+  "/terms",
+  "/contact",
+  "/api(.*)",
+]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isPublic(req)) return;

@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles, Camera, Info, ScanBarcode } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { uploadItemImage } from "@/lib/storage";
-import { itemFormSchema } from "@/lib/validators";
+import { itemFormSchema, type Extraction, type ShelfLife } from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
 import { CATEGORY_META } from "@/lib/categories";
 import type { Category, Item } from "@/types/database";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ScanUploader } from "@/components/scan-uploader";
 
 export type ItemFormInitial = Partial<
   Pick<
@@ -28,9 +29,12 @@ export type ItemFormInitial = Partial<
     | "quantity"
     | "unit"
     | "notes"
+    | "barcode"
     | "image_url"
   >
 >;
+
+const UNIT_SUGGESTIONS = ["pcs", "ml", "L", "g", "kg", "pack", "box", "bottle", "strip", "tablets"];
 
 export function ItemForm({
   mode,
@@ -38,11 +42,13 @@ export function ItemForm({
   // A File handed in from the scan flow — uploaded only when the user confirms by saving.
   pendingImage = null,
   fromScan = false,
+  notice,
 }: {
   mode: "create" | "edit";
   initial?: ItemFormInitial;
   pendingImage?: File | null;
   fromScan?: boolean;
+  notice?: string;
 }) {
   const router = useRouter();
   const supabase = useSupabaseClient();
@@ -52,11 +58,53 @@ export function ItemForm({
   const [category, setCategory] = useState<Category>((initial.category as Category) ?? "food");
   const [expiry, setExpiry] = useState(initial.expiry_date ?? "");
   const [mfg, setMfg] = useState(initial.manufacture_date ?? "");
-  const [quantity, setQuantity] = useState(initial.quantity != null ? String(initial.quantity) : "");
+  const [quantity, setQuantity] = useState(initial.quantity != null ? String(initial.quantity) : "1");
   const [unit, setUnit] = useState(initial.unit ?? "");
   const [notes, setNotes] = useState(initial.notes ?? "");
+  const [barcode] = useState(initial.barcode ?? "");
   const [file, setFile] = useState<File | null>(pendingImage);
   const [saving, setSaving] = useState(false);
+  const [estimating, setEstimating] = useState(false);
+  const [showScan, setShowScan] = useState(false);
+  const [estimateNote, setEstimateNote] = useState<string | null>(null);
+
+  async function estimateExpiry() {
+    if (!name.trim()) {
+      toast.error("Enter a product name first.");
+      return;
+    }
+    setEstimating(true);
+    try {
+      const res = await fetch("/api/estimate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), category, base_date: mfg || undefined }),
+      });
+      const est = (await res.json()) as ShelfLife & { source?: string };
+      if (!res.ok || !est.expiry_date) {
+        toast.error("Couldn't estimate a date for this item — please enter it.");
+        return;
+      }
+      setExpiry(est.expiry_date);
+      setEstimateNote(est.basis ?? "AI-estimated expiry — please confirm.");
+      toast.success(`Estimated expiry: ${est.expiry_date}`);
+    } catch {
+      toast.error("Estimate failed. Please enter the date.");
+    } finally {
+      setEstimating(false);
+    }
+  }
+
+  // Inline OCR: scan the printed label/date to fill the date (and name/category if still empty).
+  function handleScanFill(ex: Extraction, scanned: File) {
+    if (ex.expiry_date) setExpiry(ex.expiry_date);
+    if (!name.trim() && ex.product_name) setName(ex.product_name);
+    if (!initial.category && ex.category) setCategory(ex.category);
+    setFile(scanned);
+    setEstimateNote(null);
+    setShowScan(false);
+    toast.success(ex.expiry_date ? "Date filled from label" : "Label scanned — review the details");
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,12 +117,12 @@ export function ItemForm({
       quantity,
       unit: unit || null,
       notes: notes || null,
+      barcode: barcode || null,
     });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Please fix the form.");
       return;
     }
-
     if (!userId) {
       toast.error("Session expired. Please sign in again.");
       return;
@@ -108,10 +156,23 @@ export function ItemForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      {fromScan && (
+      {notice && (
+        <p className="flex items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-accent">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{notice}</span>
+        </p>
+      )}
+      {!notice && fromScan && (
         <p className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-accent">
           Review the auto-filled details below. Nothing is saved until you press “Save item”.
         </p>
+      )}
+
+      {barcode && (
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-surface/[0.04] px-3 py-2 text-xs text-muted">
+          <ScanBarcode className="h-3.5 w-3.5 text-primary" />
+          Barcode: <span className="font-mono text-foreground">{barcode}</span>
+        </div>
       )}
 
       <div>
@@ -140,11 +201,38 @@ export function ItemForm({
             id="expiry"
             type="date"
             value={expiry}
-            onChange={(e) => setExpiry(e.target.value)}
+            onChange={(e) => {
+              setExpiry(e.target.value);
+              setEstimateNote(null);
+            }}
             required
           />
         </div>
       </div>
+
+      {/* Smart helpers: AI estimate + scan the printed date */}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={estimateExpiry}
+          disabled={estimating}
+        >
+          {estimating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+          Estimate expiry with AI
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setShowScan((s) => !s)}>
+          <Camera className="h-3.5 w-3.5" /> {showScan ? "Close scanner" : "Scan date from label"}
+        </Button>
+      </div>
+      {estimateNote && <p className="text-xs text-muted">✨ {estimateNote}</p>}
+
+      {showScan && (
+        <div className="rounded-xl border border-border p-3">
+          <ScanUploader onExtracted={handleScanFill} />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -165,7 +253,18 @@ export function ItemForm({
           </div>
           <div>
             <Label htmlFor="unit">Unit</Label>
-            <Input id="unit" value={unit ?? ""} onChange={(e) => setUnit(e.target.value)} placeholder="ml, pcs" />
+            <Input
+              id="unit"
+              list="unit-suggestions"
+              value={unit ?? ""}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder="pcs, ml"
+            />
+            <datalist id="unit-suggestions">
+              {UNIT_SUGGESTIONS.map((u) => (
+                <option key={u} value={u} />
+              ))}
+            </datalist>
           </div>
         </div>
       </div>

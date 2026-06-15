@@ -14,6 +14,7 @@ import {
   Leaf,
   Pill,
   FileText,
+  ScanBarcode,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LandingNav } from "@/components/landing-nav";
@@ -28,6 +29,11 @@ const STATS = [
 ];
 
 const FEATURES = [
+  {
+    icon: ScanBarcode,
+    title: "Barcode scanning",
+    body: "Scan a product barcode like a shop till — we identify it and AI estimates a likely expiry you can confirm.",
+  },
   {
     icon: ScanLine,
     title: "Scan, don’t type",
@@ -100,7 +106,7 @@ export function Landing() {
           <div className="animate-fade-up text-center lg:text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
               <Sparkles className="h-3.5 w-3.5" />
-              OCR + AI-assisted expiry tracking
+              Barcode + OCR + AI expiry tracking
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
@@ -279,13 +285,22 @@ export function Landing() {
             </span>
             Expire <span className="font-semibold text-foreground">X</span> · Track. Confirm. Relax.
           </span>
-          <div className="flex items-center gap-5 text-xs">
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs">
             <a href="#features" className="transition hover:text-foreground">
               Features
             </a>
             <a href="#faq" className="transition hover:text-foreground">
               FAQ
             </a>
+            <Link href="/privacy" className="transition hover:text-foreground">
+              Privacy
+            </Link>
+            <Link href="/terms" className="transition hover:text-foreground">
+              Terms
+            </Link>
+            <Link href="/contact" className="transition hover:text-foreground">
+              Contact
+            </Link>
             <Link href="/login" className="transition hover:text-foreground">
               Sign in
             </Link>
@@ -355,8 +370,8 @@ function HeroPreview() {
       </div>
 
       <div className="mt-4 flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs text-foreground">
-        <ScanLine className="h-4 w-4 shrink-0 text-primary" />
-        Scan a new label to auto-fill name, date &amp; category.
+        <ScanBarcode className="h-4 w-4 shrink-0 text-primary" />
+        Scan a barcode or label to auto-fill name, date &amp; category.
       </div>
     </div>
   );

@@ -22,6 +22,7 @@ export const itemFormSchema = z
       .optional(),
     unit: z.string().trim().max(40).nullable().optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
+    barcode: z.string().trim().max(64).nullable().optional(),
   })
   .refine(
     (v) => !v.manufacture_date || v.manufacture_date <= v.expiry_date,
@@ -38,3 +39,25 @@ export const extractionSchema = z.object({
 });
 
 export type Extraction = z.infer<typeof extractionSchema>;
+
+// Shape Gemini must return for an AI shelf-life estimate (used when no printed date is read).
+export const shelfLifeSchema = z.object({
+  // estimated expiry as ISO date, or null if the model can't reason about it
+  expiry_date: dateString.nullable(),
+  // rough confidence so the UI can flag low-confidence guesses
+  confidence: z.enum(["high", "medium", "low"]).nullable(),
+  // one short human sentence explaining the basis (e.g. "Milk keeps ~7 days refrigerated")
+  basis: z.string().max(160).nullable(),
+});
+
+export type ShelfLife = z.infer<typeof shelfLifeSchema>;
+
+// Product identity resolved from a barcode (Open Food Facts). Dates never come from here.
+export type ProductLookup = {
+  found: boolean;
+  barcode: string;
+  name: string | null;
+  brand: string | null;
+  category: import("@/types/database").Category | null;
+  image_url: string | null;
+};

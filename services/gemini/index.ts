@@ -1,6 +1,11 @@
 import "server-only";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { extractionSchema, type Extraction } from "@/lib/validators";
+import {
+  extractionSchema,
+  shelfLifeSchema,
+  type Extraction,
+  type ShelfLife,
+} from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
 
 const MODEL = "gemini-2.5-flash"; // multimodal; reads the label image and extracts in one call
@@ -51,6 +56,47 @@ ${RULES}`;
     { inlineData: { data: imageBase64, mimeType } },
   ]);
   return parse(result.response.text());
+}
+
+function parseShelfLife(raw: string): ShelfLife {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { expiry_date: null, confidence: null, basis: null };
+  }
+  const safe = shelfLifeSchema.safeParse(parsed);
+  return safe.success ? safe.data : { expiry_date: null, confidence: null, basis: null };
+}
+
+/**
+ * Estimate a likely expiry date from product identity when no printed date is read.
+ * `baseDate` is the manufacture/purchase date (or today) the shelf life is measured from.
+ */
+export async function geminiEstimateShelfLife(
+  productName: string,
+  category: string,
+  baseDate: string
+): Promise<ShelfLife> {
+  const prompt = `You are a food-safety and product shelf-life expert.
+Estimate a realistic EXPIRY date for the product below, measured from the base date.
+
+Product: "${productName}"
+Category: ${category}
+Base date (manufacture or purchase): ${baseDate} (Asia/Kolkata)
+
+Return ONLY JSON with exactly these keys:
+- "expiry_date": string | null  (ISO "YYYY-MM-DD"; base date + a typical unopened shelf life)
+- "confidence": "high" | "medium" | "low" | null
+- "basis": string | null  (ONE short sentence, e.g. "Sealed UHT milk keeps ~6 months")
+
+Rules:
+- Base the estimate on typical UNOPENED shelf life for this kind of product.
+- Perishables (fresh dairy, produce, cooked food) = days; packaged/canned = months/years.
+- For non-perishables (documents, electronics warranty) where shelf life is meaningless, return null with confidence null.
+- Never return a date before the base date. Be realistic, not optimistic.`;
+  const result = await model().generateContent(prompt);
+  return parseShelfLife(result.response.text());
 }
 
 /** Fallback path: extract from OCR text (used when image extraction fails, after Tesseract). */

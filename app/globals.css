@@ -65,6 +65,46 @@ summary::-webkit-details-marker {
   display: none;
 }
 
+/* Lightweight prose styling for legal / content pages (no typography plugin needed). */
+.prose {
+  color: rgb(var(--muted));
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+.prose h2 {
+  color: rgb(var(--foreground));
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+}
+.prose h3 {
+  color: rgb(var(--foreground));
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.35rem;
+}
+.prose p {
+  margin-bottom: 0.85rem;
+}
+.prose ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin-bottom: 0.85rem;
+}
+.prose li {
+  margin-bottom: 0.35rem;
+}
+.prose strong {
+  color: rgb(var(--foreground));
+  font-weight: 600;
+}
+.prose a {
+  color: rgb(var(--primary));
+  text-decoration: underline;
+}
+
 * {
   border-color: var(--border);
 }

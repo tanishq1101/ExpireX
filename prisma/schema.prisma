@@ -56,6 +56,7 @@ model Item {
   quantity        Decimal?  @db.Decimal
   unit            String?
   notes           String?
+  barcode         String? // EAN/UPC/QR scanned at entry (identifies the product, not the date)
   imageUrl        String?   @map("image_url")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -66,6 +67,7 @@ model Item {
   @@index([userId, expiryDate])
   @@index([userId, category])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, barcode])
   @@index([expiryDate])
   @@map("items")
 }

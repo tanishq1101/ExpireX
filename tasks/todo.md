@@ -1,39 +1,31 @@
-# Landing redesign + light/dark theme + green rebrand
+# Smart inventory: barcode + OCR + AI estimate, ease-of-entry, legal/contact pages
+
+Decisions (user, 2026-06-15): Barcode + OCR + AI shelf-life estimate; product DB = Open Food Facts (free).
 
 ## Plan
-- [ ] 1. Theme tokens: convert hardcoded colors to CSS variables (light `:root` + `.dark`), green palette
-- [ ] 2. tailwind.config: map colors to `rgb(var(--x)/<alpha>)`, add `surface` token + animation keyframes
-- [ ] 3. globals.css: theme-aware `.glass` / `.glass-input`, green animated aurora + grid + blobs
-- [ ] 4. ThemeProvider (no-flash script, localStorage, system pref) + useTheme
-- [ ] 5. ThemeToggle button (sun/moon, animated, accessible)
-- [ ] 6. Fix `white/*` surfaces in button / skeleton / stat-card / app-nav so light mode works
-- [ ] 7. Rich animated Background (green, perf-gated)
-- [ ] 8. LandingNav (sticky, glass, mobile hamburger menu + toggle, mobile-aligned)
-- [ ] 9. Redesign landing.tsx (hero + preview, stats, features, how-it-works, FAQ/description, CTA, footer)
-- [ ] 10. Wire layout.tsx (provider, no-flash, themed Toaster, adaptive themeColor)
-- [ ] 11. Verify: `npm run build` clean + manual check both themes / mobile
+- [ ] 1. DB: add `barcode text` column to items (Supabase migration); update prisma schema + types + validators
+- [ ] 2. services/openfoodfacts: fetch product by barcode → {name, brand, category, image}
+- [ ] 3. services/gemini: add geminiEstimateShelfLife (expiry estimate + confidence + basis)
+- [ ] 4. lib/shelf-life.ts: local fallback shelf-life table (works if Gemini fails)
+- [ ] 5. API: /api/lookup (barcode→product) and /api/estimate (name+category→expiry)
+- [ ] 6. components/barcode-scanner.tsx: camera scan via native BarcodeDetector + @zxing/browser fallback
+- [ ] 7. Rework add-item-tabs → 3 modes (Barcode / Photo / Manual); autonomous barcode→lookup→estimate→form
+- [ ] 8. item-form: barcode field, source/AI-estimate badges, "Scan date (OCR)" + "Estimate with AI", smart defaults
+- [ ] 9. Legal/contact: /privacy, /terms, /contact (detailed) + shared SiteFooter; link from landing footer; middleware public
+- [ ] 10. Verify: npm run build clean; manual-review the smart flow
+- [ ] 11. Commit + push; then list suggested future features
 
 ## Review
-All 11 steps done. Shipped:
-- **Theme system**: CSS-variable tokens (light `:root` + `.dark`) in `app/globals.css`; Tailwind
-  colors remapped to `rgb(var(--x)/<alpha>)` so every existing `/15`, `/40`, `/90` opacity utility
-  stays theme-aware. New `surface` token replaces the dark-only `white/[0.0x]` surfaces in
-  button / skeleton / stat-card / app-nav so light mode renders correctly.
-- **No-flash light/dark**: `themeInitScript` in `<head>` sets the class before paint;
-  `ThemeProvider` persists choice in localStorage + follows OS until the user picks; `ThemeToggle`
-  (animated sun/moon) added to the landing nav and the in-app header; `ThemedToaster` follows theme;
-  adaptive `viewport.themeColor`.
-- **Green rebrand**: emerald→teal palette across primary/accent/aurora/blobs.
-- **Landing**: new `LandingNav` (sticky glass bar, mobile hamburger sheet, scroll-locked) +
-  full redesign — animated hero with live "Your shelf" preview card, stats strip, feature grid,
-  3-step how-it-works with connector line, FAQ accordion (`<details>`, no JS), gradient CTA, footer.
-- **Background**: richer perf-gated green aurora + dotted grid + floating blobs (auto-calmed on
-  mobile / reduced-motion).
+All 11 steps done and live at https://expire-x-three.vercel.app.
 
-Verification: `npm run build` clean (twice); live prod HTML at https://expire-x-three.vercel.app
-confirmed serving redesigned content + theme script + green aurora (HTTP 200). NOTE: the sandboxed
-preview browser had no network route to the dev server (every nav → chrome-error), so visual QA was
-done via SSR HTML + build, not screenshots — user should eyeball both themes on their phone.
+- **DB**: `items.barcode text` added via Supabase migration (`crwwfkanhmlytayzqvyt`) + repo `0003_barcode.sql`; prisma schema, types/database.ts, validators all updated.
+- **Barcode lookup**: `services/openfoodfacts` queries Open Food Facts + Open Beauty/Products Facts (free, no key). Verified live against Nutella (3017620422003) → name/brand/category/image returned correctly. `/api/lookup` (auth-gated, 401 unauth confirmed).
+- **AI shelf-life**: `geminiEstimateShelfLife` + `lib/shelf-life.ts` local fallback table. `/api/estimate` tries Gemini then falls back. 401 unauth confirmed.
+- **Barcode scanner**: `components/barcode-scanner.tsx` — native `BarcodeDetector` (Chrome) with dynamic `@zxing/browser` fallback (iOS/Firefox), reticle overlay, vibrate, manual-entry fallback, proper camera cleanup. Tap-to-start gate so opening "Add item" doesn't auto-prompt the camera.
+- **Flow**: `barcode-add.tsx` orchestrates scan → lookup → AI estimate → prefilled confirm form. `add-item-tabs.tsx` now 3 modes (Barcode / Photo / Manual). `item-form.tsx` gained barcode chip, "Estimate expiry with AI", inline "Scan date from label" (reuses ScanUploader), unit datalist, qty default 1, notice banner.
+- **Legal/contact**: `/privacy`, `/terms`, `/contact` (detailed, accurate to real data flows incl. AI-estimate disclaimer), public via middleware, `SiteFooter` + `LegalPage` wrapper, `.prose` styles, contact form via mailto. Linked from landing footer. All 200 live.
+- **Landing**: added "Barcode scanning" feature + barcode copy in hero/preview.
 
-Bug caught in review: CTA decorative blob used `.bg-blob` (position:fixed) → wouldn't clip to the
-card; switched to a contained `absolute … blur-3xl` element.
+Verification: `npm run build` clean (type-check + lint); Open Food Facts integration tested live; all public pages 200; all 3 API routes 401 unauthenticated (wired, not crashing). Visual QA still blocked by sandbox preview networking — user should test the scan flow signed-in on mobile Chrome.
+
+Note: `CONTACT_EMAIL` in `lib/site.ts` is set to the owner's gmail so the contact form works — change to a dedicated support inbox if preferred.
