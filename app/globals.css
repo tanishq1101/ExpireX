@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0b0b0b;
+  color: #ededed;
+}
+
+@layer components {
+  /* Glassmorphism. Blur is the expensive part on mobile, so cap it small and drop it
+     entirely on coarse-pointer / small screens — perf wins over blur per spec. */
+  .glass {
+    @apply rounded-2xl border border-border bg-white/[0.04];
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  @media (max-width: 767px), (pointer: coarse) {
+    .glass {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      @apply bg-white/[0.05];
+    }
+  }
+
+  .glass-input {
+    @apply w-full rounded-xl border border-border bg-input px-3 py-2 text-sm text-foreground
+      placeholder:text-muted/70 outline-none transition focus:border-primary
+      focus:ring-2 focus:ring-primary/40 disabled:opacity-50;
+  }
+}
+
+/* Ambient animated background — rich on desktop, disabled on mobile / reduced-motion. */
+.bg-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(40% 50% at 15% 20%, rgba(45, 125, 255, 0.18), transparent 70%),
+    radial-gradient(35% 45% at 85% 30%, rgba(34, 211, 238, 0.14), transparent 70%),
+    radial-gradient(45% 55% at 50% 90%, rgba(45, 125, 255, 0.1), transparent 70%);
+  background-size: 200% 200%;
+}
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .bg-aurora {
+    animation: gradient-pan 18s ease infinite;
+  }
+}
+@keyframes gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}

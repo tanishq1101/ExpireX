@@ -1,0 +1,85 @@
+// Prisma is used for SCHEMA/MIGRATIONS ONLY. No runtime queries go through Prisma
+// (that would bypass RLS via the direct connection). All runtime reads/writes use the
+// Supabase client so `auth.uid()` RLS policies apply.
+//
+// RLS policies, the auth.users -> public.users trigger, storage bucket/policies, and the
+// pg_cron job are NOT expressible in Prisma. They live in supabase/migrations/*.sql and
+// MUST be kept in sync with this schema by hand. After `prisma migrate`, apply the SQL
+// files below in the Supabase SQL editor (or via `supabase db push`).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Category {
+  food
+  medicine
+  cosmetics
+  documents
+  warranty
+  subscription
+  other
+}
+
+enum ReminderType {
+  d30
+  d15
+  d7
+  d3
+  d1
+}
+
+model User {
+  id        String   @id // Clerk user id (text, e.g. user_2ab...)
+  email     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  items            Item[]
+  notificationLogs NotificationLog[]
+
+  @@map("users")
+}
+
+model Item {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @map("user_id") // Clerk user id (text)
+  name            String
+  category        Category
+  expiryDate      DateTime  @map("expiry_date") @db.Date
+  manufactureDate DateTime? @map("manufacture_date") @db.Date
+  quantity        Decimal?  @db.Decimal
+  unit            String?
+  notes           String?
+  imageUrl        String?   @map("image_url")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationLogs NotificationLog[]
+
+  @@index([userId, expiryDate])
+  @@index([userId, category])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([expiryDate])
+  @@map("items")
+}
+
+model NotificationLog {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId       String       @map("item_id") @db.Uuid
+  userId       String       @map("user_id") // Clerk user id (text)
+  reminderType ReminderType @map("reminder_type")
+  sentAt       DateTime     @default(now()) @map("sent_at") @db.Timestamptz(6)
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, reminderType]) // hard dedup guarantee for reminders
+  @@map("notification_log")
+}
