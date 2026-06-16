@@ -182,7 +182,20 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
   const [open, setOpen] = React.useState(false);
   const [closing, setClosing] = React.useState(false);
   const [faqOpen, setFaqOpen] = React.useState<number | null>(null);
+  const [modesOpen, setModesOpen] = React.useState(false);
+  const [compact, setCompact] = React.useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
+
+  React.useEffect(() => {
+    setCompact(document.documentElement.classList.contains("compact"));
+  }, []);
+
+  const toggleCompact = React.useCallback(() => {
+    const next = !compact;
+    setCompact(next);
+    document.documentElement.classList.toggle("compact", next);
+    try { localStorage.setItem("compact", next ? "1" : "0"); } catch { /* ignore */ }
+  }, [compact]);
   const push = useDrawerPush();
   const isDark = theme === "dark";
 
@@ -312,10 +325,27 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                 />
               )}
 
-              {/* Additional mode settings */}
-              <DrawerRow icon={Sliders} label="Additional Modes" chevron>
-                <span className="text-[11px] text-muted">Coming soon</span>
-              </DrawerRow>
+              {/* Additional modes — expandable */}
+              <button type="button" onClick={() => setModesOpen((v) => !v)} className="w-full">
+                <DrawerRow icon={Sliders} label="Additional Modes" chevron chevronOpen={modesOpen} />
+              </button>
+              {modesOpen && (
+                <div className="mb-1 pl-3 pr-1">
+                  <DrawerRow
+                    icon={Sliders}
+                    label="Compact View"
+                    trailing={
+                      <ToggleSwitch
+                        checked={compact}
+                        onChange={toggleCompact}
+                        label="Toggle compact view"
+                      />
+                    }
+                  >
+                    <span className="text-[11px] text-muted">Smaller item rows</span>
+                  </DrawerRow>
+                </div>
+              )}
 
               <Divider />
 

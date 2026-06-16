@@ -14,6 +14,7 @@ const ThemeContext = React.createContext<ThemeContextValue | null>(null);
 
 /** Runs before paint (injected in <head>) to set the class with no flash. */
 export const themeInitScript = `(function(){try{var s=localStorage.getItem('theme');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;var d=s? s==='dark':m;var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){document.documentElement.classList.add('dark');}})();`;
+export const compactInitScript = `(function(){try{document.documentElement.classList.toggle('compact',localStorage.getItem('compact')==='1');}catch(e){}})();`;
 
 function getInitialTheme(): Theme {
   if (typeof document === "undefined") return "dark";

@@ -132,6 +132,19 @@ summary::-webkit-details-marker {
       focus:ring-2 focus:ring-primary/40 disabled:opacity-50;
   }
 
+  /* Compact mode: tighter item rows */
+  .compact li .glass {
+    border-radius: 0.875rem;
+  }
+  .compact li .glass .h-10 {
+    height: 2rem;
+    width: 2rem;
+  }
+  .compact li .glass {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
   /* Premium hover: lift + navy glow + accent border. Pair with `glass`. */
   .hover-glow {
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease,

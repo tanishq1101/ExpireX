@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Background } from "@/components/background";
-import { ThemeProvider, themeInitScript } from "@/components/theme-provider";
+import { ThemeProvider, themeInitScript, compactInitScript } from "@/components/theme-provider";
 import { ThemedToaster } from "@/components/themed-toaster";
 import { SplashScreen } from "@/components/splash-screen";
 import { PwaRegister } from "@/components/pwa-register";
@@ -34,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <html lang="en" suppressHydrationWarning>
         <head>
           <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+          <script dangerouslySetInnerHTML={{ __html: compactInitScript }} />
         </head>
         <body className={inter.className}>
           <ThemeProvider>
