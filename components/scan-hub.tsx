@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ScanBarcode, Camera, ReceiptText, PencilLine, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Extraction } from "@/lib/validators";
+import { initialFromExtraction } from "@/lib/extraction";
 import { ItemForm, type ItemFormInitial } from "@/components/item-form";
 import { ScanUploader } from "@/components/scan-uploader";
 import { BarcodeAdd } from "@/components/barcode-add";
@@ -30,18 +31,12 @@ export function ScanHub({ compact = false }: { compact?: boolean }) {
   }
 
   function handleExtracted(ex: Extraction, file: File) {
-    setResult({
-      initial: {
-        name: ex.product_name ?? "",
-        category: ex.category ?? undefined,
-        expiry_date: ex.expiry_date ?? undefined,
-      },
-      file,
-    });
+    const { initial, notice } = initialFromExtraction(ex);
+    setResult({ initial, file, notice });
   }
 
-  function handleBarcodeResolved(initial: ItemFormInitial, notice: string) {
-    setResult({ initial, notice });
+  function handleBarcodeResolved(initial: ItemFormInitial, notice: string, file?: File) {
+    setResult({ initial, notice, file });
   }
 
   // Chooser — the scan-first screen.

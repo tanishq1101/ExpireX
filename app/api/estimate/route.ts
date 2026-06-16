@@ -33,9 +33,10 @@ export async function POST(request: Request) {
   }
 
   // Primary: Gemini reasons about the product. Fallback: local heuristic table.
+  // Only accept an estimate that is in the future (an estimate can never be "already expired").
   try {
     const ai = await geminiEstimateShelfLife(name, category, baseDate);
-    if (ai.expiry_date) return NextResponse.json({ ...ai, source: "ai" });
+    if (ai.expiry_date && ai.expiry_date > today) return NextResponse.json({ ...ai, source: "ai" });
   } catch {
     // fall through to local
   }

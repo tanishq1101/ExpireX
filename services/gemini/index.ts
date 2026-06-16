@@ -13,15 +13,21 @@ import { CATEGORIES } from "@/lib/status";
 const MODEL = "gemini-2.5-flash"; // multimodal; reads the label image and extracts in one call
 
 const RULES = `Return ONLY JSON with exactly these keys:
-- "product_name": string | null  (concise product name, no marketing fluff)
-- "expiry_date": string | null   (ISO "YYYY-MM-DD"; the EXPIRY/USE-BY/BEST-BEFORE date, NOT the manufacture date)
+- "product_name": string | null   (concise product name, no marketing fluff)
+- "brand": string | null          (maker/brand if printed)
+- "expiry_date": string | null    (ISO "YYYY-MM-DD"; the EXPIRY/USE-BY/BEST-BEFORE date, NOT manufacture)
+- "manufacture_date": string | null (ISO "YYYY-MM-DD"; MFG/MFD/PKD/"packed on" if present)
 - "category": one of [${CATEGORIES.join(", ")}] | null
+- "quantity": number | null       (net amount as a number, e.g. 500 for "500 g", 1 for "1 L")
+- "unit": string | null           (the unit only, e.g. "g", "ml", "L", "kg", "tablets", "pcs")
 
 Rules:
-- Dates on Indian packaging are usually DD/MM/YYYY.
-- If a value is unreadable or absent, use null. Never guess wildly.
-- Prefer "best before"/"exp"/"use by" for expiry. Ignore "mfg"/"packed on" for expiry.
-- If only month/year is present, use the last day of that month.`;
+- Read EVERYTHING printed. Works for food, medicines, cosmetics/makeup/creams/powders, and packaged goods.
+- Dates on Indian packaging are usually DD/MM/YYYY. If only MM/YYYY, use the LAST day of that month.
+- Prefer "best before"/"exp"/"use by"/"use before" for expiry; "mfg"/"mfd"/"pkd"/"packed on" for manufacture.
+- Medicines: read the "EXP" date; set category to "medicine".
+- Cosmetics/makeup/skincare: set category to "cosmetics". If only a Period-After-Opening symbol ("12M", "24M") is shown and there is no printed expiry, leave expiry_date null.
+- If a value is unreadable or absent, use null. Never invent a value.`;
 
 function model() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -95,8 +101,11 @@ Return ONLY JSON with exactly these keys:
 
 Rules:
 - Base the estimate on typical UNOPENED shelf life for this kind of product.
-- Perishables (fresh dairy, produce, cooked food) = days; packaged/canned = months/years.
-- For non-perishables (documents, electronics warranty) where shelf life is meaningless, return null expiry/confidence.
+- Fresh perishables (dairy, produce, bakery, cooked/fresh food) = days to ~2 weeks.
+- Packaged/canned/dry food = months to a couple of years.
+- Medicines (tablets, capsules, syrups, ointments) = typically 1–3 years from manufacture.
+- Cosmetics/makeup/creams/powders/skincare = typically 2–3 years unopened; add a tip about the Period-After-Opening (e.g. "Use within 12 months of opening").
+- For documents/warranty/subscription where a shelf life is meaningless, return null expiry/confidence.
 - Tips should be genuinely useful (e.g. "Refrigerate after opening", "Best consumed within 48h").
 - Never return a date before the base date. Be realistic, not optimistic.`;
   const result = await model().generateContent(prompt);

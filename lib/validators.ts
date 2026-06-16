@@ -41,8 +41,14 @@ export type ItemFormValues = z.infer<typeof itemFormSchema>;
 // Shape Gemini must return. Used to validate model output server-side before trusting it.
 export const extractionSchema = z.object({
   product_name: z.string().nullable(),
+  brand: z.string().nullable().optional(),
   expiry_date: dateString.nullable(),
+  manufacture_date: dateString.nullable().optional(),
   category: categorySchema.nullable(),
+  quantity: z.number().nonnegative().nullable().optional(),
+  unit: z.string().max(40).nullable().optional(),
+  // true when expiry_date was AI-estimated (no printed date found), so the UI can flag it.
+  estimated: z.boolean().optional(),
 });
 
 export type Extraction = z.infer<typeof extractionSchema>;

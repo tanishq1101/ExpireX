@@ -7,9 +7,11 @@ import { Loader2, ScanBarcode, Plus, Package } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { relativeLabel, todayKolkata } from "@/lib/dates";
-import type { ProductLookup, ShelfLife } from "@/lib/validators";
+import type { ProductLookup, ShelfLife, Extraction } from "@/lib/validators";
+import { initialFromExtraction } from "@/lib/extraction";
 import type { ItemFormInitial } from "@/components/item-form";
 import { BarcodeScanner } from "@/components/barcode-scanner";
+import { ScanUploader } from "@/components/scan-uploader";
 import { ProductAnalysisCard, type Analysis } from "@/components/product-analysis-card";
 import { Button } from "@/components/ui/button";
 
@@ -18,18 +20,21 @@ type Existing = { id: string; name: string; quantity: number | null; unit: strin
 export function BarcodeAdd({
   onResolved,
 }: {
-  onResolved: (initial: ItemFormInitial, notice: string) => void;
+  onResolved: (initial: ItemFormInitial, notice: string, file?: File) => void;
 }) {
   const router = useRouter();
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
 
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState<"intro" | "scan" | "looking" | "analysis" | "exists">("intro");
+  const [step, setStep] = useState<"intro" | "scan" | "looking" | "analysis" | "exists" | "ocr">(
+    "intro"
+  );
   // When the same barcode already exists, hold the new-item data so the user can still add it fresh.
   const [existing, setExisting] = useState<Existing | null>(null);
   const [pending, setPending] = useState<{ initial: ItemFormInitial; notice: string } | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
 
   // Kick off the AI expiry estimate in the background and stream it into the card.
   function runEstimate(name: string, category: string) {
@@ -123,13 +128,12 @@ export function BarcodeAdd({
       return;
     }
 
-    // Unknown barcode → straight to the manual form.
+    // Unknown barcode → auto-flow into the AI label reader (no empty manual form).
     if (!product.found || !product.name) {
+      setUnknownBarcode(barcode);
+      setStep("ocr");
       setBusy(false);
-      onResolved(
-        initial,
-        `Barcode ${barcode} isn't in the product database. Enter the details, or scan the label to auto-fill.`
-      );
+      toast.message("Code not in our databases — point at the label and AI will read it");
       return;
     }
 
@@ -221,6 +225,28 @@ export function BarcodeAdd({
         <Button variant="ghost" className="w-full" onClick={() => setStep("intro")}>
           Cancel
         </Button>
+      </div>
+    );
+  }
+
+  if (step === "ocr") {
+    return (
+      <div className="space-y-3">
+        <p className="flex items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-accent">
+          <ScanBarcode className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Couldn&apos;t identify barcode {unknownBarcode} in our databases. Point the camera at the
+            product label — AI will read the name, dates and details automatically.
+          </span>
+        </p>
+        <ScanUploader
+          onExtracted={(ex: Extraction, file: File) => {
+            const { initial, notice } = initialFromExtraction(ex, {
+              barcode: unknownBarcode ?? undefined,
+            });
+            onResolved(initial, notice ?? "Read from the label by AI — please confirm.", file);
+          }}
+        />
       </div>
     );
   }

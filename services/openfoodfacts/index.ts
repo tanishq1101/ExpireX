@@ -62,16 +62,56 @@ async function fetchFrom(host: string, barcode: string): Promise<OffProduct | nu
   }
 }
 
+/** Map UPCitemdb's freeform category string to our enum. */
+function mapUpcCategory(cat: string): Category {
+  const t = cat.toLowerCase();
+  if (/health|medicine|pharmacy|drug|supplement/.test(t)) return "medicine";
+  if (/beauty|cosmetic|makeup|fragrance|personal care|skin|hair/.test(t)) return "cosmetics";
+  if (/food|beverage|grocery|snack|drink|gourmet/.test(t)) return "food";
+  return "other";
+}
+
+// UPCitemdb trial endpoint: free, key-less, broad general-retail coverage (rate-limited).
+// Used as an extra fallback so far more barcodes resolve than Open Food Facts alone.
+async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
+  try {
+    const res = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(barcode)}`, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(4500),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      items?: { title?: string; brand?: string; category?: string; images?: string[] }[];
+    };
+    const it = json.items?.[0];
+    const name = (it?.title || "").trim();
+    if (!name) return null;
+    return {
+      found: true,
+      barcode,
+      name,
+      brand: it?.brand?.trim() || null,
+      size: null,
+      category: mapUpcCategory(it?.category || ""),
+      image_url: it?.images?.[0] || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Resolve a barcode to product identity. Dates/price are NEVER sourced here. */
 export async function lookupBarcode(barcode: string): Promise<ProductLookup> {
   const clean = barcode.replace(/\s+/g, "");
-  // Query all databases in PARALLEL, then pick the first hit by source priority.
-  const settled = await Promise.all(
-    SOURCES.map(async ({ host, category }) => {
+  // Query all databases IN PARALLEL, then pick the first hit by priority:
+  // Open Food / Beauty / Products Facts first (richest data), then UPCitemdb (widest coverage).
+  const settled = await Promise.all([
+    ...SOURCES.map(async ({ host, category }) => {
       const p = await fetchFrom(host, clean);
       return p ? toResult(clean, category, p) : null;
-    })
-  );
+    }),
+    fetchUpcItemDb(clean),
+  ]);
   const hit = settled.find((r): r is ProductLookup => r !== null);
   return (
     hit ?? { found: false, barcode: clean, name: null, brand: null, size: null, category: null, image_url: null }

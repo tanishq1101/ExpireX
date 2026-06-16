@@ -115,15 +115,22 @@ export function ItemForm({
     }
   }
 
-  // Inline OCR: scan the printed label/date to fill the date (and name/category if still empty).
+  // Inline OCR: scan the printed label to fill the date and any still-empty fields.
   function handleScanFill(ex: Extraction, scanned: File) {
     if (ex.expiry_date) setExpiry(ex.expiry_date);
-    if (!name.trim() && ex.product_name) setName(ex.product_name);
+    if (!name.trim() && ex.product_name) {
+      setName(ex.brand && !ex.product_name.toLowerCase().includes(ex.brand.toLowerCase())
+        ? `${ex.brand} ${ex.product_name}`
+        : ex.product_name);
+    }
     if (!initial.category && ex.category) setCategory(ex.category);
+    if (!mfg && ex.manufacture_date) setMfg(ex.manufacture_date);
+    if ((!quantity || quantity === "1") && ex.quantity != null) setQuantity(String(ex.quantity));
+    if (!unit && ex.unit) setUnit(ex.unit);
     setFile(scanned);
-    setEstimateNote(null);
+    setEstimateNote(ex.estimated ? "Expiry was AI-estimated — please confirm." : null);
     setShowScan(false);
-    toast.success(ex.expiry_date ? "Date filled from label" : "Label scanned — review the details");
+    toast.success(ex.expiry_date ? "Filled from label" : "Label scanned — review the details");
   }
 
   async function onSubmit(e: React.FormEvent) {
