@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Menu, X, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SettingsDrawer } from "@/components/settings-drawer";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -43,7 +43,7 @@ export function LandingNav() {
         style={scrolled ? { borderColor: "var(--glass-border)" } : undefined}
       >
         <div className="flex items-center gap-2">
-          <SettingsDrawer variant="landing" />
+          <ThemeToggle />
           <Link href="/" className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
             <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-sm font-black text-primary-foreground shadow-[0_0_20px_-4px] shadow-primary/60">
               X
