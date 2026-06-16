@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/database";
 
 export function ItemRow({ item, today }: { item: Item; today: string }) {
-  const status = getStatus(today, item.expiry_date);
+  const status = getStatus(today, item.effective_expiry);
   const meta = STATUS_META[status];
   const img = externalImageUrl(item.image_url);
+  const opened = item.opened_date && item.effective_expiry < item.expiry_date;
 
   return (
     <li>
@@ -31,7 +32,9 @@ export function ItemRow({ item, today }: { item: Item; today: string }) {
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">{item.name}</p>
           <p className="truncate text-xs text-muted">
-            {relativeLabel(today, item.expiry_date)}
+            {relativeLabel(today, item.effective_expiry)}
+            {opened ? " · opened" : ""}
+            {item.location ? ` · ${item.location}` : ""}
             {item.quantity ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ""}` : ""}
           </p>
         </div>

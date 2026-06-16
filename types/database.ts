@@ -23,13 +23,20 @@ export interface Item {
   unit: string | null;
   notes: string | null;
   barcode: string | null;
+  location: string | null;
+  opened_date: string | null;
+  open_within_days: number | null;
+  effective_expiry: string; // DB-generated: soonest of expiry_date and opened+within
   image_url: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type ItemInsert = Omit<Item, "id" | "created_at" | "updated_at">;
-export type ItemUpdate = Partial<Omit<Item, "id" | "user_id" | "created_at" | "updated_at">>;
+// effective_expiry is DB-generated, so it is never inserted/updated directly.
+export type ItemInsert = Omit<Item, "id" | "created_at" | "updated_at" | "effective_expiry">;
+export type ItemUpdate = Partial<
+  Omit<Item, "id" | "user_id" | "created_at" | "updated_at" | "effective_expiry">
+>;
 
 export interface ShoppingItem {
   id: string;

@@ -1,33 +1,24 @@
-# Redesign v2: navy/light-blue reskin + splash screen + HUD scanner
+# Wave 2 (subset): location + opened-date/use-within + PWA install + push
 
-Decisions: navy primary (#1D4ED8) + light-blue accent (#38BDF8); full HUD scanner with HONEST stats (real expiry days + real AI confidence + AI tips, no fake telemetry); splash once per browser session.
+Scope: storage location; opened-date "use within"; PWA install; web push. SKIP batches + household sharing.
 
 ## Plan
-- [ ] 1. Color reskin green→navy/light-blue: globals.css tokens (light+dark), aurora, blobs; Clerk colorPrimary; viewport themeColor; logo gradients
-- [ ] 2. Emails: digest + reminders recolour to navy; redeploy weekly-digest
-- [ ] 3. Splash screen (image 1): logo + wordmark + progress bar + TRACK.SAVE.SUSTAIN.; once/session (sessionStorage); reduced-motion safe; mount in root layout
-- [ ] 4. AI tips: extend geminiEstimateShelfLife + shelfLifeSchema + /api/estimate to return short tips[]
-- [ ] 5. HUD scanner (image 2): reticle brackets + scan-line + 'AI SYSTEM ACTIVE' status strip on BarcodeScanner
-- [ ] 6. ProductAnalysisCard: name/image/EXP days/confidence/tips/"View full analysis" → confirm form; wire into BarcodeAdd
-- [ ] 7. Hover/animation polish on landing + dashboard (glow lifts)
-- [ ] 8. Build + deploy + verify; commit + push
+- [ ] 1. DB: items.location, opened_date, open_within_days, effective_expiry (generated = least(expiry, opened+within)); push_subscriptions table + RLS. MCP migration + repo SQL + prisma + types.
+- [ ] 2. validators: location, opened_date, open_within_days in itemFormSchema
+- [ ] 3. item-form: location (datalist) + "Opened?" section (opened_date + use-within) with effective-expiry hint
+- [ ] 4. App uses effective_expiry for status/sort/filter: item-row, detail, dashboard counts+list, items list+filter, shopping suggestions; show location chip
+- [ ] 5. filter-bar: location filter on /items
+- [ ] 6. reminders + digest edge fns: switch to effective_expiry; redeploy
+- [ ] 7. PWA: manifest + icon + service worker (public/sw.js) + register + install prompt component
+- [ ] 8. Push: VAPID keys (generate + Vercel env + app_config) + /api/push/subscribe + subscribe UI + send from reminders edge fn (additive, try/catch)
+- [ ] 9. Build + deploy + verify; commit + push
 
 ## Review (DONE, live)
-- **Navy/light-blue reskin**: globals.css tokens (light+dark) green→navy(#1D4ED8)/sky(#38BDF8); aurora + blobs reblued; Clerk colorPrimary #2563EB; viewport themeColor; landing gradients. `--success` stays green (status semantics). Verified live: navy tokens in CSS, only green hit is `--success`.
-- **Splash** (`components/splash-screen.tsx`): logo (gradient square + dashed ring + X) + wordmark + animated progress bar + TRACK·SAVE·SUSTAIN; once per session (sessionStorage), reduced-motion safe, mounted in root layout over everything.
-- **AI tips**: shelfLifeSchema + geminiEstimateShelfLife + /api/estimate now return `tips[]`.
-- **HUD scanner**: barcode-scanner reticle = corner brackets + sweeping scan-line + "AI SYSTEM ACTIVE / EXPIRE X" status strip; new `scanline`/`pulse-ring` keyframes.
-- **ProductAnalysisCard** (image 2): product image/icon, name, EXP: N DAYS (toned by urgency), honest "AI MATCH: HIGH/MED/LOW" confidence (no fake %/telemetry), 1-2 AI tips, dashed "View full analysis" → confirm form. Wired into barcode-add as an `analysis` step (identified products only; unknown barcodes skip to form).
-- **Hover/animation**: `.hover-glow` (lift + navy glow + accent border) on scan-hub tiles, landing feature cards, how-it-works cards.
-- **Emails**: digest recoloured navy + redeployed (weekly-digest v2). reminders h2 recoloured in source (cosmetic blue→blue, not redeployed).
+- **Storage location**: items.location; form datalist; item-row + detail chip; /items location filter (FilterBar `locations` prop, distinct values from DB).
+- **Opened-date / use-within**: items.opened_date + open_within_days + GENERATED `effective_expiry = least(expiry_date, opened_date+open_within_days)`. Form has "Opened?" section + effective-use-by hint. App now uses effective_expiry for status/sort/filter everywhere (item-row, detail, dashboard counts+list, items query+filters, shopping suggestions) AND in the reminders + digest edge functions (redeployed v3). Single source of truth; non-destructive (printed expiry kept).
+- **PWA install**: public/manifest.webmanifest + public/icon.svg + public/sw.js (push + notificationclick); PwaRegister in layout; metadata.manifest/appleWebApp/icons. Fixed middleware matcher so /sw.js + /manifest.webmanifest are public (was 307→login). Both now 200.
+- **Web push**: web-push npm; VAPID keys generated + set in Vercel env (NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT) + .env.local + CRON_SECRET. push_subscriptions table+RLS. /api/push/subscribe (POST/DELETE, Clerk). /api/push/run (Node, admin client, web-push send, dedup-free once-daily) protected by Authorization: Bearer CRON_SECRET (Vercel cron) or x-cron-secret. Vercel cron in vercel.json (30 2 * * * = 08:00 IST). PushToggle bell in app header. Verified: push/run with secret → {due:0,sent:0}; subscribe 401 unauth; run 403 no secret.
 
-Verify: build clean (type+lint) x2; deployed; `/` 200; navy tokens confirmed in live CSS; digest fn v2 ACTIVE. Visual QA blocked by sandbox preview networking — user to eyeball splash + scanner on mobile.
+Verify: build clean; deployed; manifest+sw 200; edge fns v3 ACTIVE; push/run works. Push DELIVERY needs a real device/installed PWA over HTTPS to confirm end to end (iOS requires the app be installed to Home Screen first).
 
-## Barcode speed-up (2026-06-16, DONE/live)
-- OFF lookup: 3 databases now queried IN PARALLEL (was sequential, up to ~13.5s worst case → ~4.5s); timeout 7s→4.5s; added `size` (package quantity) field.
-- barcode-add: product lookup + duplicate-check run in parallel; analysis card shows INSTANTLY on identify, AI estimate streams in after (ProductAnalysisCard `estimating` placeholder + shimmer). No more waiting for the LLM before seeing the product.
-- Card now shows package size. Told user: barcode has NO MFG date or price (not fabricated).
-Build clean, deployed.
-
-## Still pending (Wave 2, user said later)
-Inventory depth: storage locations, opened-date/PAO, batch tracking, household sharing. Also PWA + web push.
+## Skipped (per user): batch tracking, household sharing.

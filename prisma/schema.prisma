@@ -57,6 +57,11 @@ model Item {
   unit            String?
   notes           String?
   barcode         String? // EAN/UPC/QR scanned at entry (identifies the product, not the date)
+  location        String? // storage location e.g. Fridge, Pantry
+  openedDate      DateTime? @map("opened_date") @db.Date
+  openWithinDays  Int?      @map("open_within_days")
+  // DB-generated (least(expiry_date, opened_date + open_within_days)); managed via SQL, not Prisma.
+  effectiveExpiry DateTime? @map("effective_expiry") @db.Date
   imageUrl        String?   @map("image_url")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -69,6 +74,7 @@ model Item {
   @@index([userId, category])
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, barcode])
+  @@index([userId, effectiveExpiry])
   @@index([expiryDate])
   @@map("items")
 }
@@ -89,6 +95,18 @@ model ShoppingList {
 
   @@index([userId, checked, createdAt(sort: Desc)])
   @@map("shopping_list")
+}
+
+model PushSubscription {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model NotificationLog {

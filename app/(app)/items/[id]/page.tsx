@@ -20,7 +20,7 @@ export default async function EditItemPage({ params }: { params: Promise<{ id: s
   const item = data as Item;
 
   const today = todayKolkata();
-  const status = getStatus(today, item.expiry_date);
+  const status = getStatus(today, item.effective_expiry);
   const img = externalImageUrl(item.image_url);
 
   return (
@@ -38,7 +38,10 @@ export default async function EditItemPage({ params }: { params: Promise<{ id: s
         )}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-semibold">{item.name}</h1>
-          <p className="text-xs text-muted">{relativeLabel(today, item.expiry_date)}</p>
+          <p className="text-xs text-muted">
+            {relativeLabel(today, item.effective_expiry)}
+            {item.location ? ` · ${item.location}` : ""}
+          </p>
         </div>
         <Badge className={cn(STATUS_META[status].tone)}>{STATUS_META[status].label}</Badge>
       </div>

@@ -8,6 +8,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { uploadItemImage } from "@/lib/storage";
 import { externalImageUrl } from "@/lib/utils";
+import { addDays } from "@/lib/dates";
 import { itemFormSchema, type Extraction, type ShelfLife } from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
 import { CATEGORY_META } from "@/lib/categories";
@@ -31,11 +32,24 @@ export type ItemFormInitial = Partial<
     | "unit"
     | "notes"
     | "barcode"
+    | "location"
+    | "opened_date"
+    | "open_within_days"
     | "image_url"
   >
 >;
 
 const UNIT_SUGGESTIONS = ["pcs", "ml", "L", "g", "kg", "pack", "box", "bottle", "strip", "tablets"];
+const LOCATION_SUGGESTIONS = [
+  "Fridge",
+  "Freezer",
+  "Pantry",
+  "Kitchen cabinet",
+  "Medicine box",
+  "Bathroom",
+  "Wardrobe",
+  "Desk",
+];
 
 export function ItemForm({
   mode,
@@ -63,6 +77,11 @@ export function ItemForm({
   const [unit, setUnit] = useState(initial.unit ?? "");
   const [notes, setNotes] = useState(initial.notes ?? "");
   const [barcode] = useState(initial.barcode ?? "");
+  const [location, setLocation] = useState(initial.location ?? "");
+  const [openedDate, setOpenedDate] = useState(initial.opened_date ?? "");
+  const [openWithin, setOpenWithin] = useState(
+    initial.open_within_days != null ? String(initial.open_within_days) : ""
+  );
   const [file, setFile] = useState<File | null>(pendingImage);
   const [saving, setSaving] = useState(false);
   const [estimating, setEstimating] = useState(false);
@@ -119,6 +138,9 @@ export function ItemForm({
       unit: unit || null,
       notes: notes || null,
       barcode: barcode || null,
+      location: location || null,
+      opened_date: openedDate || null,
+      open_within_days: openWithin || null,
     });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Please fix the form.");
@@ -154,6 +176,14 @@ export function ItemForm({
       setSaving(false);
     }
   }
+
+  // Soonest of the printed expiry and the opened-window date (mirrors the DB generated column).
+  const effectiveHint = (() => {
+    const n = parseInt(openWithin, 10);
+    if (!openedDate || !Number.isFinite(n) || n <= 0) return null;
+    const eff = addDays(openedDate, n);
+    return !expiry || eff < expiry ? eff : null;
+  })();
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -280,6 +310,54 @@ export function ItemForm({
             </datalist>
           </div>
         </div>
+      </div>
+
+      <div>
+        <Label htmlFor="location">Storage location</Label>
+        <Input
+          id="location"
+          list="location-suggestions"
+          value={location ?? ""}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="Fridge, Pantry, Medicine box…"
+        />
+        <datalist id="location-suggestions">
+          {LOCATION_SUGGESTIONS.map((l) => (
+            <option key={l} value={l} />
+          ))}
+        </datalist>
+      </div>
+
+      {/* Opened tracking — shortens the effective expiry once a product is opened. */}
+      <div className="space-y-3 rounded-xl border border-border p-3">
+        <p className="text-xs font-medium text-muted">
+          Opened? <span className="font-normal">Optional — we’ll use whichever date comes first.</span>
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="opened">Opened on</Label>
+            <Input
+              id="opened"
+              type="date"
+              value={openedDate ?? ""}
+              onChange={(e) => setOpenedDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="within">Use within (days)</Label>
+            <Input
+              id="within"
+              type="number"
+              min="1"
+              value={openWithin}
+              onChange={(e) => setOpenWithin(e.target.value)}
+              placeholder="7"
+            />
+          </div>
+        </div>
+        {effectiveHint && (
+          <p className="text-xs text-accent">⏳ Effective use-by: {effectiveHint}</p>
+        )}
       </div>
 
       <div>

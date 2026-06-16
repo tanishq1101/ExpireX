@@ -23,6 +23,13 @@ export const itemFormSchema = z
     unit: z.string().trim().max(40).nullable().optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
     barcode: z.string().trim().max(64).nullable().optional(),
+    location: z.string().trim().max(60).nullable().optional(),
+    opened_date: dateString.nullable().optional(),
+    open_within_days: z
+      .union([z.coerce.number().int().positive().max(3650), z.literal("")])
+      .transform((v) => (v === "" ? null : v))
+      .nullable()
+      .optional(),
   })
   .refine(
     (v) => !v.manufacture_date || v.manufacture_date <= v.expiry_date,

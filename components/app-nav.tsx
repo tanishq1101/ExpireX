@@ -7,6 +7,7 @@ import { LayoutDashboard, Package, Plus, LogOut, ShoppingCart } from "lucide-rea
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { PushToggle } from "@/components/push-toggle";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -30,6 +31,7 @@ export function AppNav({ email }: { email: string }) {
         </Link>
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-muted sm:inline">{email}</span>
+          <PushToggle />
           <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="Sign out">
             <LogOut className="h-4 w-4" />

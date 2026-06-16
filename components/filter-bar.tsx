@@ -8,7 +8,7 @@ import { CATEGORY_META } from "@/lib/categories";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-export function FilterBar() {
+export function FilterBar({ locations = [] }: { locations?: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -59,6 +59,21 @@ export function FilterBar() {
         <option value="expired">Expired</option>
         <option value="ok">OK</option>
       </Select>
+      {locations.length > 0 && (
+        <Select
+          className="sm:w-40"
+          defaultValue={params.get("location") ?? ""}
+          onChange={(e) => setParam("location", e.target.value)}
+          aria-label="Filter by location"
+        >
+          <option value="">All locations</option>
+          {locations.map((l) => (
+            <option key={l} value={l}>
+              {l}
+            </option>
+          ))}
+        </Select>
+      )}
     </div>
   );
 }

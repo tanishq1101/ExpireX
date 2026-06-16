@@ -5,6 +5,7 @@ import { Background } from "@/components/background";
 import { ThemeProvider, themeInitScript } from "@/components/theme-provider";
 import { ThemedToaster } from "@/components/themed-toaster";
 import { SplashScreen } from "@/components/splash-screen";
+import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
@@ -13,6 +14,9 @@ export const metadata: Metadata = {
   title: "Expire X — never miss an expiry",
   description:
     "Track expiry dates for food, medicine, cosmetics, documents and more. Scan a label, confirm the details, and get reminded before it's too late.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Expire X", statusBarStyle: "black-translucent" },
+  icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
 
 export const viewport: Viewport = {
@@ -37,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
             <ThemedToaster />
             <SplashScreen />
+            <PwaRegister />
           </ThemeProvider>
         </body>
       </html>

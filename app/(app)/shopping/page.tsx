@@ -18,12 +18,12 @@ export default async function ShoppingPage() {
       .select("*")
       .order("checked", { ascending: true })
       .order("created_at", { ascending: false }),
-    // Expired or expiring within a week → candidates to re-buy.
+    // Expired or expiring within a week (effective date) → candidates to re-buy.
     supabase
       .from("items")
-      .select("id, name, category, expiry_date, quantity, unit")
-      .lte("expiry_date", soon)
-      .order("expiry_date", { ascending: true })
+      .select("id, name, category, expiry_date, effective_expiry, quantity, unit")
+      .lte("effective_expiry", soon)
+      .order("effective_expiry", { ascending: true })
       .limit(50),
   ]);
 
@@ -37,8 +37,8 @@ export default async function ShoppingPage() {
       name: it.name,
       unit: it.unit,
       quantity: it.quantity,
-      expiry_date: it.expiry_date,
-      expired: it.expiry_date < today,
+      expiry_date: it.effective_expiry,
+      expired: it.effective_expiry < today,
     }));
 
   return (

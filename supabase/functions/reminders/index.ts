@@ -81,11 +81,12 @@ Deno.serve(async (req) => {
   for (const o of REMINDER_OFFSETS) dueByDate.set(addDays(today, o.days), o.type);
   const dueDates = [...dueByDate.keys()];
 
-  // Items expiring on exactly one of the reminder offset dates, with the owner's email.
+  // Items whose EFFECTIVE expiry (printed/estimated, or opened-window if sooner) lands on
+  // exactly one of the reminder offset dates, with the owner's email.
   const { data: items, error } = await supabase
     .from("items")
-    .select("id, name, expiry_date, user_id, users(email)")
-    .in("expiry_date", dueDates);
+    .select("id, name, expiry_date, effective_expiry, user_id, users(email)")
+    .in("effective_expiry", dueDates);
 
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
 
@@ -104,7 +105,7 @@ Deno.serve(async (req) => {
   const errors: string[] = [];
 
   for (const item of items ?? []) {
-    const type = dueByDate.get(item.expiry_date as string)!;
+    const type = dueByDate.get(item.effective_expiry as string)!;
     if (sent.has(`${item.id}:${type}`)) continue;
 
     // deno-lint-ignore no-explicit-any
@@ -118,7 +119,7 @@ Deno.serve(async (req) => {
         from,
         to: email,
         itemName: item.name as string,
-        expiry: item.expiry_date as string,
+        expiry: item.effective_expiry as string,
         daysLeft,
       });
       // Write log only after a confirmed send. Unique(item_id,reminder_type) blocks dupes.

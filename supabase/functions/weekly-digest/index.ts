@@ -28,6 +28,7 @@ type Row = {
   id: string;
   name: string;
   expiry_date: string;
+  effective_expiry: string;
   created_at: string;
   user_id: string;
   users?: { email?: string } | null;
@@ -43,7 +44,7 @@ function digestHtml(opts: {
   const { total, expiringThisWeek, expiredCount, recentCount } = opts;
   const rows = expiringThisWeek
     .map((it) => {
-      const d = daysBetween(opts.today, it.expiry_date);
+      const d = daysBetween(opts.today, it.effective_expiry);
       const when = d === 0 ? "today" : d === 1 ? "tomorrow" : `in ${d} days`;
       return `<tr>
         <td style="padding:8px 0;border-bottom:1px solid #e5e7eb">${it.name}</td>
@@ -110,8 +111,8 @@ Deno.serve(async (req) => {
   // All items with the owner's email; grouped per user in memory.
   const { data: items, error } = await supabase
     .from("items")
-    .select("id, name, expiry_date, created_at, user_id, users(email)")
-    .order("expiry_date", { ascending: true });
+    .select("id, name, expiry_date, effective_expiry, created_at, user_id, users(email)")
+    .order("effective_expiry", { ascending: true });
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
 
   const byUser = new Map<string, Row[]>();
@@ -128,9 +129,13 @@ Deno.serve(async (req) => {
     const email = rows[0]?.users?.email;
     if (!email) continue;
 
-    const expiringThisWeek = rows.filter((r) => r.expiry_date >= today && r.expiry_date <= in7);
-    const expiringSoon = rows.filter((r) => r.expiry_date >= today && r.expiry_date <= in30);
-    const expiredCount = rows.filter((r) => r.expiry_date < today).length;
+    const expiringThisWeek = rows.filter(
+      (r) => r.effective_expiry >= today && r.effective_expiry <= in7
+    );
+    const expiringSoon = rows.filter(
+      (r) => r.effective_expiry >= today && r.effective_expiry <= in30
+    );
+    const expiredCount = rows.filter((r) => r.effective_expiry < today).length;
     const recentCount = rows.filter((r) => r.created_at >= recentSince).length;
 
     // Only email when there's something actionable, to avoid noise.

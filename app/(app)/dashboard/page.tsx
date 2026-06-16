@@ -21,15 +21,15 @@ export default async function DashboardPage() {
 
   const [total, expired, expiring, recent, upcoming] = await Promise.all([
     countQuery(),
-    countQuery().lt("expiry_date", today),
-    countQuery().gte("expiry_date", today).lte("expiry_date", soon),
+    countQuery().lt("effective_expiry", today),
+    countQuery().gte("effective_expiry", today).lte("effective_expiry", soon),
     countQuery().gte("created_at", recentSince),
     supabase
       .from("items")
       .select("*")
-      .gte("expiry_date", today)
-      .lte("expiry_date", soon)
-      .order("expiry_date", { ascending: true })
+      .gte("effective_expiry", today)
+      .lte("effective_expiry", soon)
+      .order("effective_expiry", { ascending: true })
       .limit(5),
   ]);
 
