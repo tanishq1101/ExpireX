@@ -10,6 +10,7 @@ import { relativeLabel, todayKolkata } from "@/lib/dates";
 import type { ProductLookup, ShelfLife } from "@/lib/validators";
 import type { ItemFormInitial } from "@/components/item-form";
 import { BarcodeScanner } from "@/components/barcode-scanner";
+import { ProductAnalysisCard, type Analysis } from "@/components/product-analysis-card";
 import { Button } from "@/components/ui/button";
 
 type Existing = { id: string; name: string; quantity: number | null; unit: string | null; expiry_date: string };
@@ -24,10 +25,11 @@ export function BarcodeAdd({
   const { userId } = useAuth();
 
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState<"intro" | "scan" | "looking" | "exists">("intro");
+  const [step, setStep] = useState<"intro" | "scan" | "looking" | "analysis" | "exists">("intro");
   // When the same barcode already exists, hold the new-item data so the user can still add it fresh.
   const [existing, setExisting] = useState<Existing | null>(null);
   const [pending, setPending] = useState<{ initial: ItemFormInitial; notice: string } | null>(null);
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
 
   async function handleDetected(barcode: string) {
     setBusy(true);
@@ -39,6 +41,8 @@ export function BarcodeAdd({
 
       const initial: ItemFormInitial = { barcode };
       let notice: string;
+      let confidence: ShelfLife["confidence"] = null;
+      let tips: string[] | null = null;
 
       if (product.found && product.name) {
         const nm = product.name;
@@ -47,7 +51,7 @@ export function BarcodeAdd({
         if (product.category) initial.category = product.category;
         if (product.image_url) initial.image_url = product.image_url; // auto-attach product image
 
-        // 2) Barcodes carry no date — AI estimates a likely expiry.
+        // 2) Barcodes carry no date — AI estimates a likely expiry (+ confidence + tips).
         try {
           const estRes = await fetch("/api/estimate", {
             method: "POST",
@@ -55,6 +59,8 @@ export function BarcodeAdd({
             body: JSON.stringify({ name: initial.name, category: initial.category ?? "other" }),
           });
           const est = (await estRes.json()) as ShelfLife;
+          confidence = est.confidence ?? null;
+          tips = est.tips ?? null;
           if (est.expiry_date) {
             initial.expiry_date = est.expiry_date;
             notice = `Identified "${initial.name}" by barcode. Expiry is an AI estimate${
@@ -85,6 +91,21 @@ export function BarcodeAdd({
         setExisting(data as Existing);
         setPending({ initial, notice });
         setStep("exists");
+        return;
+      }
+
+      // 4) Identified products get the HUD analysis card; unknown barcodes go straight to the form.
+      if (product.found && product.name) {
+        setAnalysis({
+          name: initial.name ?? "",
+          imageUrl: initial.image_url ?? null,
+          category: initial.category,
+          expiryDate: initial.expiry_date ?? null,
+          confidence,
+          tips,
+        });
+        setPending({ initial, notice });
+        setStep("analysis");
         return;
       }
 
@@ -119,6 +140,20 @@ export function BarcodeAdd({
         <Loader2 className="h-7 w-7 animate-spin text-primary" />
         <p className="text-sm">Working…</p>
       </div>
+    );
+  }
+
+  if (step === "analysis" && analysis && pending) {
+    return (
+      <ProductAnalysisCard
+        analysis={analysis}
+        today={todayKolkata()}
+        onContinue={() => onResolved(pending.initial, pending.notice)}
+        onRescan={() => {
+          setAnalysis(null);
+          setStep("scan");
+        }}
+      />
     );
   }
 

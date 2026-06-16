@@ -3,55 +3,55 @@
 @tailwind utilities;
 
 /* ---------- Theme tokens (channel triplets so Tailwind alpha modifiers work) ----------
-   Light is the default in :root; .dark overrides. Brand is green (emerald → teal). */
+   Light is the default in :root; .dark overrides. Brand is blue (navy → light blue). */
 :root {
   color-scheme: light;
 
-  --background: 244 252 248; /* mint white */
-  --foreground: 8 28 20; /* deep green-black */
-  --muted: 75 102 90; /* muted green-gray */
-  --surface: 12 40 28; /* dark tint for alpha surfaces on light bg */
+  --background: 244 248 253; /* cool blue-white */
+  --foreground: 12 22 41; /* deep navy-black */
+  --muted: 82 96 122; /* muted blue-gray */
+  --surface: 18 32 64; /* dark navy tint for alpha surfaces on light bg */
 
-  --primary: 5 150 105; /* emerald-600 */
+  --primary: 29 78 216; /* blue-700 (navy) */
   --primary-foreground: 255 255 255;
-  --accent: 13 148 136; /* teal-600 */
+  --accent: 2 132 199; /* sky-600 (light blue) */
   --accent-foreground: 255 255 255;
 
   --success: 16 185 129;
   --warning: 217 119 6;
   --danger: 220 38 38;
 
-  --ring: 16 185 129;
+  --ring: 37 99 235;
 
-  --border: rgba(8, 28, 20, 0.1);
-  --input: rgba(8, 28, 20, 0.04);
-  --glass-bg: rgba(255, 255, 255, 0.68);
-  --glass-border: rgba(8, 28, 20, 0.08);
+  --border: rgba(12, 22, 41, 0.1);
+  --input: rgba(12, 22, 41, 0.04);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(12, 22, 41, 0.08);
 }
 
 .dark {
   color-scheme: dark;
 
-  --background: 7 14 11; /* near-black with green undertone */
-  --foreground: 233 250 243;
-  --muted: 148 170 161;
+  --background: 7 11 22; /* navy-black */
+  --foreground: 231 238 250;
+  --muted: 148 162 188;
   --surface: 255 255 255; /* white tint for alpha surfaces on dark bg */
 
-  --primary: 16 185 129; /* emerald-500 */
+  --primary: 37 99 235; /* blue-600 */
   --primary-foreground: 255 255 255;
-  --accent: 45 212 191; /* teal-300 */
-  --accent-foreground: 4 18 14;
+  --accent: 56 189 248; /* sky-400 (light blue) */
+  --accent-foreground: 4 12 26;
 
   --success: 52 211 153;
   --warning: 251 191 36;
   --danger: 248 113 113;
 
-  --ring: 16 185 129;
+  --ring: 56 189 248;
 
   --border: rgba(255, 255, 255, 0.09);
   --input: rgba(255, 255, 255, 0.06);
   --glass-bg: rgba(255, 255, 255, 0.04);
-  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-border: rgba(255, 255, 255, 0.1);
 }
 
 html,
@@ -131,6 +131,17 @@ summary::-webkit-details-marker {
       placeholder:text-muted/70 outline-none transition focus:border-primary
       focus:ring-2 focus:ring-primary/40 disabled:opacity-50;
   }
+
+  /* Premium hover: lift + navy glow + accent border. Pair with `glass`. */
+  .hover-glow {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease,
+      border-color 0.3s ease;
+  }
+  .hover-glow:hover {
+    transform: translateY(-4px);
+    border-color: rgb(var(--primary) / 0.5);
+    box-shadow: 0 16px 44px -14px rgb(var(--primary) / 0.5);
+  }
 }
 
 /* ---------- Ambient animated background — rich on desktop, calm on mobile ---------- */
@@ -140,16 +151,16 @@ summary::-webkit-details-marker {
   z-index: -2;
   /* light mode: a gentler wash */
   background:
-    radial-gradient(42% 50% at 12% 18%, rgba(16, 185, 129, 0.16), transparent 70%),
-    radial-gradient(38% 46% at 88% 26%, rgba(20, 184, 166, 0.14), transparent 70%),
-    radial-gradient(48% 56% at 50% 96%, rgba(34, 197, 94, 0.12), transparent 70%);
+    radial-gradient(42% 50% at 12% 18%, rgba(29, 78, 216, 0.16), transparent 70%),
+    radial-gradient(38% 46% at 88% 26%, rgba(56, 189, 248, 0.14), transparent 70%),
+    radial-gradient(48% 56% at 50% 96%, rgba(37, 99, 235, 0.12), transparent 70%);
   background-size: 200% 200%;
 }
 .dark .bg-aurora {
   background:
-    radial-gradient(42% 50% at 12% 18%, rgba(16, 185, 129, 0.22), transparent 70%),
-    radial-gradient(38% 46% at 88% 26%, rgba(20, 184, 166, 0.18), transparent 70%),
-    radial-gradient(48% 56% at 50% 96%, rgba(34, 197, 94, 0.14), transparent 70%);
+    radial-gradient(42% 50% at 12% 18%, rgba(37, 99, 235, 0.24), transparent 70%),
+    radial-gradient(38% 46% at 88% 26%, rgba(56, 189, 248, 0.18), transparent 70%),
+    radial-gradient(48% 56% at 50% 96%, rgba(29, 78, 216, 0.16), transparent 70%);
   background-size: 200% 200%;
 }
 

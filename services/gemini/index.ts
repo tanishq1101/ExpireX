@@ -91,11 +91,13 @@ Return ONLY JSON with exactly these keys:
 - "expiry_date": string | null  (ISO "YYYY-MM-DD"; base date + a typical unopened shelf life)
 - "confidence": "high" | "medium" | "low" | null
 - "basis": string | null  (ONE short sentence, e.g. "Sealed UHT milk keeps ~6 months")
+- "tips": string[] | null  (1-2 short, practical storage/usage tips, each under 12 words)
 
 Rules:
 - Base the estimate on typical UNOPENED shelf life for this kind of product.
 - Perishables (fresh dairy, produce, cooked food) = days; packaged/canned = months/years.
-- For non-perishables (documents, electronics warranty) where shelf life is meaningless, return null with confidence null.
+- For non-perishables (documents, electronics warranty) where shelf life is meaningless, return null expiry/confidence.
+- Tips should be genuinely useful (e.g. "Refrigerate after opening", "Best consumed within 48h").
 - Never return a date before the base date. Be realistic, not optimistic.`;
   const result = await model().generateContent(prompt);
   return parseShelfLife(result.response.text());

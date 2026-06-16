@@ -111,7 +111,7 @@ export function Landing() {
 
             <h1 className="mt-6 text-balance text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
               Never let anything{" "}
-              <span className="bg-gradient-to-r from-primary via-emerald-400 to-accent bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-primary via-blue-500 to-accent bg-clip-text text-transparent">
                 expire
               </span>{" "}
               again.
@@ -193,7 +193,7 @@ export function Landing() {
           {FEATURES.map(({ icon: Icon, title, body }) => (
             <div
               key={title}
-              className="glass group p-6 transition duration-300 hover:-translate-y-1 hover:border-primary/40"
+              className="glass hover-glow group p-6"
             >
               <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-accent/15 text-primary transition group-hover:scale-110">
                 <Icon className="h-5 w-5" />
@@ -219,7 +219,7 @@ export function Landing() {
             aria-hidden
           />
           {STEPS.map(({ icon: Icon, title, body }, i) => (
-            <div key={title} className="glass relative p-6 text-center">
+            <div key={title} className="glass hover-glow relative p-6 text-center">
               <span className="absolute right-4 top-3 text-4xl font-black text-primary/10">
                 {i + 1}
               </span>
@@ -257,7 +257,7 @@ export function Landing() {
 
       {/* ---------------- CTA ---------------- */}
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-        <div className="relative overflow-hidden rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/15 via-emerald-500/10 to-accent/15 p-10 text-center sm:p-16">
+        <div className="relative overflow-hidden rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/15 via-blue-500/10 to-accent/15 p-10 text-center sm:p-16">
           <div
             className="pointer-events-none absolute left-1/2 top-0 h-56 w-56 -translate-x-1/2 animate-blob rounded-full bg-primary/30 blur-3xl"
             aria-hidden

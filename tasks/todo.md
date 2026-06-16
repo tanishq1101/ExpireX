@@ -1,20 +1,27 @@
-# Wave 3: weekly email digest (+insight) + auto shopping list
+# Redesign v2: navy/light-blue reskin + splash screen + HUD scanner
+
+Decisions: navy primary (#1D4ED8) + light-blue accent (#38BDF8); full HUD scanner with HONEST stats (real expiry days + real AI confidence + AI tips, no fake telemetry); splash once per browser session.
 
 ## Plan
-- [ ] 1. weekly-digest Edge Function (Deno): per-user summary of expiring-this-week + insight stats, Resend, green theme, cron-secret gate
-- [ ] 2. Deploy weekly-digest via Supabase MCP
-- [ ] 3. Schedule weekly pg_cron (Mon 08:00 IST = 30 2 * * 1 UTC) + repo migration 0004
-- [ ] 4. shopping_list table + RLS (MCP migration) + repo SQL 0005 + prisma + types
-- [ ] 5. /shopping page: auto "suggested to buy" (from expired/expiring) + saved list (check/remove/manual add)
-- [ ] 6. Nav links (desktop + mobile bottom bar) to Shopping
-- [ ] 7. Build + deploy frontend + verify; commit + push
+- [ ] 1. Color reskin green→navy/light-blue: globals.css tokens (light+dark), aurora, blobs; Clerk colorPrimary; viewport themeColor; logo gradients
+- [ ] 2. Emails: digest + reminders recolour to navy; redeploy weekly-digest
+- [ ] 3. Splash screen (image 1): logo + wordmark + progress bar + TRACK.SAVE.SUSTAIN.; once/session (sessionStorage); reduced-motion safe; mount in root layout
+- [ ] 4. AI tips: extend geminiEstimateShelfLife + shelfLifeSchema + /api/estimate to return short tips[]
+- [ ] 5. HUD scanner (image 2): reticle brackets + scan-line + 'AI SYSTEM ACTIVE' status strip on BarcodeScanner
+- [ ] 6. ProductAnalysisCard: name/image/EXP days/confidence/tips/"View full analysis" → confirm form; wire into BarcodeAdd
+- [ ] 7. Hover/animation polish on landing + dashboard (glow lifts)
+- [ ] 8. Build + deploy + verify; commit + push
 
-## Review (Wave 3 — DONE, live)
-- **Weekly email digest + insight**: `supabase/functions/weekly-digest/index.ts` (Deno) — per-user summary of items expiring within 7 days + insight stats (total tracked / expiring this week / expired / added this week), green-themed HTML, Resend (secrets from app_config), cron-secret gated. Deployed via MCP (ACTIVE, verify_jwt=false). Only emails users with something actionable (expiring ≤30d or expired) to avoid noise.
-- **Cron**: `expirex-weekly-digest` scheduled `30 2 * * 1` UTC = Mon 08:00 IST (alongside daily reminders). Repo record: `0004_weekly_digest_cron.sql`.
-- **Auto shopping list**: `public.shopping_list` table + RLS (MCP migration; repo `0005_shopping_list.sql`); prisma model + `ShoppingItem` type. `/shopping` page: auto "Suggested to buy" (items expired/expiring ≤7d not already listed) + saved list (check/uncheck, remove, clear-checked, manual add). `components/shopping-client.tsx`. Nav links added (desktop top nav + mobile bottom bar, px tightened for 4 tabs).
+## Review (DONE, live)
+- **Navy/light-blue reskin**: globals.css tokens (light+dark) green→navy(#1D4ED8)/sky(#38BDF8); aurora + blobs reblued; Clerk colorPrimary #2563EB; viewport themeColor; landing gradients. `--success` stays green (status semantics). Verified live: navy tokens in CSS, only green hit is `--success`.
+- **Splash** (`components/splash-screen.tsx`): logo (gradient square + dashed ring + X) + wordmark + animated progress bar + TRACK·SAVE·SUSTAIN; once per session (sessionStorage), reduced-motion safe, mounted in root layout over everything.
+- **AI tips**: shelfLifeSchema + geminiEstimateShelfLife + /api/estimate now return `tips[]`.
+- **HUD scanner**: barcode-scanner reticle = corner brackets + sweeping scan-line + "AI SYSTEM ACTIVE / EXPIRE X" status strip; new `scanline`/`pulse-ring` keyframes.
+- **ProductAnalysisCard** (image 2): product image/icon, name, EXP: N DAYS (toned by urgency), honest "AI MATCH: HIGH/MED/LOW" confidence (no fake %/telemetry), 1-2 AI tips, dashed "View full analysis" → confirm form. Wired into barcode-add as an `analysis` step (identified products only; unknown barcodes skip to form).
+- **Hover/animation**: `.hover-glow` (lift + navy glow + accent border) on scan-hub tiles, landing feature cards, how-it-works cards.
+- **Emails**: digest recoloured navy + redeployed (weekly-digest v2). reminders h2 recoloured in source (cosmetic blue→blue, not redeployed).
 
-Verification: build clean (type+lint); function deployed + 403 on bad/no secret (didn't trigger real send); both cron jobs active; `shopping_list` table present with rls_enabled=true; deployed to prod; `/shopping` 307 unauth, `/` 200. Visual QA still blocked by sandbox preview networking.
+Verify: build clean (type+lint) x2; deployed; `/` 200; navy tokens confirmed in live CSS; digest fn v2 ACTIVE. Visual QA blocked by sandbox preview networking — user to eyeball splash + scanner on mobile.
 
 ## Still pending (Wave 2, user said later)
 Inventory depth: storage locations, opened-date/PAO, batch tracking, household sharing. Also PWA + web push.

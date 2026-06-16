@@ -52,6 +52,16 @@ const config: Config = {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
+        scanline: {
+          "0%": { transform: "translateY(0)", opacity: "0" },
+          "12%": { opacity: "1" },
+          "88%": { opacity: "1" },
+          "100%": { transform: "translateY(360px)", opacity: "0" },
+        },
+        "pulse-ring": {
+          "0%, 100%": { opacity: "0.5" },
+          "50%": { opacity: "1" },
+        },
       },
       animation: {
         "gradient-pan": "gradient-pan 18s ease infinite",
@@ -60,6 +70,8 @@ const config: Config = {
         float: "float 6s ease-in-out infinite",
         blob: "blob 22s ease-in-out infinite",
         shimmer: "shimmer 2.5s linear infinite",
+        scanline: "scanline 2.4s ease-in-out infinite",
+        "pulse-ring": "pulse-ring 2s ease-in-out infinite",
       },
     },
   },

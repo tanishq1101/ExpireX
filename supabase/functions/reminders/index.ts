@@ -45,7 +45,7 @@ async function sendEmail(opts: {
       to: opts.to,
       subject: `⏳ "${opts.itemName}" expires ${when}`,
       html: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto">
-        <h2 style="color:#2D7DFF">Expire X reminder</h2>
+        <h2 style="color:#1D4ED8">Expire X reminder</h2>
         <p><strong>${opts.itemName}</strong> expires <strong>${when}</strong> (${opts.expiry}).</p>
         <p style="color:#666;font-size:13px">Open Expire X to review or update this item.</p>
       </div>`,

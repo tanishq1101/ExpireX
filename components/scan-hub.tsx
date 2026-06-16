@@ -53,7 +53,7 @@ export function ScanHub({ compact = false }: { compact?: boolean }) {
             key={id}
             type="button"
             onClick={() => setMode(id)}
-            className="glass group flex flex-col items-center gap-2 p-5 text-center transition hover:-translate-y-0.5 hover:border-primary/40"
+            className="glass hover-glow group flex flex-col items-center gap-2 p-5 text-center"
           >
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-primary/20 to-accent/15 text-primary transition group-hover:scale-110">
               <Icon className="h-6 w-6" />

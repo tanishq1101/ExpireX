@@ -62,6 +62,8 @@ export const shelfLifeSchema = z.object({
   confidence: z.enum(["high", "medium", "low"]).nullable(),
   // one short human sentence explaining the basis (e.g. "Milk keeps ~7 days refrigerated")
   basis: z.string().max(160).nullable(),
+  // up to 3 short, practical usage/storage tips for the scanner analysis card
+  tips: z.array(z.string().max(120)).max(3).nullable().optional(),
 });
 
 export type ShelfLife = z.infer<typeof shelfLifeSchema>;

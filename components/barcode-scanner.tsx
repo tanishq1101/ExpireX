@@ -160,20 +160,40 @@ export function BarcodeScanner({
   return (
     <div className="space-y-3">
       {!cameraFailed && (
-        <div className="relative overflow-hidden rounded-xl border border-border bg-black">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-black">
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video ref={videoRef} playsInline muted className="mx-auto max-h-72 w-full object-cover" />
+          <video ref={videoRef} playsInline muted className="mx-auto max-h-80 w-full object-cover" />
+
+          {/* HUD status strip */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/90">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 animate-pulse-ring rounded-full bg-accent" />
+              AI System Active
+            </span>
+            <span className="text-white/70">Expire X</span>
+          </div>
+
+          {/* Reticle: corner brackets + sweeping scan-line */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="relative h-28 w-4/5 rounded-lg border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]">
-              <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-primary" />
+            <div className="relative h-32 w-4/5 max-w-xs">
+              {[
+                "left-0 top-0 border-l-2 border-t-2",
+                "right-0 top-0 border-r-2 border-t-2",
+                "left-0 bottom-0 border-l-2 border-b-2",
+                "right-0 bottom-0 border-r-2 border-b-2",
+              ].map((p) => (
+                <span key={p} className={`absolute h-7 w-7 rounded-[3px] border-accent ${p}`} />
+              ))}
+              <div className="absolute inset-x-2 top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-accent shadow-[0_0_12px] shadow-accent" />
             </div>
           </div>
+
           {usingNative && !starting && (
             <button
               type="button"
               onClick={flipCamera}
               aria-label="Flip camera"
-              className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70"
+              className="absolute right-2 top-8 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70"
             >
               <SwitchCamera className="h-4 w-4" />
             </button>
@@ -183,7 +203,7 @@ export function BarcodeScanner({
               <Loader2 className="h-4 w-4 animate-spin" /> Starting camera…
             </div>
           )}
-          <p className="absolute inset-x-0 bottom-2 text-center text-xs text-white/80">
+          <p className="absolute inset-x-0 bottom-2 text-center font-mono text-[11px] uppercase tracking-widest text-white/80">
             Point at the product barcode
           </p>
         </div>

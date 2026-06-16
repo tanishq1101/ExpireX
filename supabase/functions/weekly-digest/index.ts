@@ -47,16 +47,16 @@ function digestHtml(opts: {
       const when = d === 0 ? "today" : d === 1 ? "tomorrow" : `in ${d} days`;
       return `<tr>
         <td style="padding:8px 0;border-bottom:1px solid #e5e7eb">${it.name}</td>
-        <td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;color:#059669;font-weight:600">${when}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;color:#1D4ED8;font-weight:600">${when}</td>
       </tr>`;
     })
     .join("");
 
   return `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;margin:auto;color:#0f172a">
-    <h2 style="color:#059669;margin:0 0 4px">Your weekly Expire X digest</h2>
+    <h2 style="color:#1D4ED8;margin:0 0 4px">Your weekly Expire X digest</h2>
     <p style="color:#64748b;margin:0 0 16px;font-size:14px">Here's what needs your attention this week.</p>
 
-    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px">
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px">
       <strong>${total}</strong> item${total === 1 ? "" : "s"} tracked ·
       <strong>${expiringThisWeek.length}</strong> expiring this week ·
       <strong>${expiredCount}</strong> expired ·
@@ -78,7 +78,7 @@ function digestHtml(opts: {
         : ""
     }
 
-    <a href="${APP_URL}/dashboard" style="display:inline-block;margin-top:18px;background:#059669;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:600;font-size:14px">Open Expire X</a>
+    <a href="${APP_URL}/dashboard" style="display:inline-block;margin-top:18px;background:#1D4ED8;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:600;font-size:14px">Open Expire X</a>
 
     <p style="color:#94a3b8;font-size:12px;margin-top:20px">You receive this weekly summary because you track items on Expire X.</p>
   </div>`;
