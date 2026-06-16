@@ -17,6 +17,7 @@ type OffProduct = {
   product_name?: string;
   product_name_en?: string;
   brands?: string;
+  quantity?: string;
   categories_tags?: string[];
   image_front_url?: string;
   image_url?: string;
@@ -30,13 +31,27 @@ function refineCategory(fallback: Category, tags: string[] = []): Category {
   return fallback;
 }
 
+function toResult(barcode: string, category: Category, p: OffProduct): ProductLookup | null {
+  const name = (p.product_name_en || p.product_name || "").trim();
+  if (!name) return null;
+  return {
+    found: true,
+    barcode,
+    name,
+    brand: (p.brands || "").split(",")[0]?.trim() || null,
+    size: (p.quantity || "").trim() || null,
+    category: refineCategory(category, p.categories_tags),
+    image_url: p.image_front_url || p.image_url || null,
+  };
+}
+
 async function fetchFrom(host: string, barcode: string): Promise<OffProduct | null> {
-  const url = `https://${host}/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,product_name_en,brands,categories_tags,image_front_url,image_url`;
+  const url = `https://${host}/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,product_name_en,brands,quantity,categories_tags,image_front_url,image_url`;
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": UA, Accept: "application/json" },
-      // OFF can be slow; don't hang the request forever.
-      signal: AbortSignal.timeout(7000),
+      // Tighter timeout so one slow DB can't stall the scan.
+      signal: AbortSignal.timeout(4500),
     });
     if (!res.ok) return null;
     const json = (await res.json()) as { status?: number; product?: OffProduct };
@@ -47,22 +62,18 @@ async function fetchFrom(host: string, barcode: string): Promise<OffProduct | nu
   }
 }
 
-/** Resolve a barcode to product identity. Dates are NEVER sourced here. */
+/** Resolve a barcode to product identity. Dates/price are NEVER sourced here. */
 export async function lookupBarcode(barcode: string): Promise<ProductLookup> {
   const clean = barcode.replace(/\s+/g, "");
-  for (const { host, category } of SOURCES) {
-    const p = await fetchFrom(host, clean);
-    if (!p) continue;
-    const name = (p.product_name_en || p.product_name || "").trim();
-    if (!name) continue;
-    return {
-      found: true,
-      barcode: clean,
-      name,
-      brand: (p.brands || "").split(",")[0]?.trim() || null,
-      category: refineCategory(category, p.categories_tags),
-      image_url: p.image_front_url || p.image_url || null,
-    };
-  }
-  return { found: false, barcode: clean, name: null, brand: null, category: null, image_url: null };
+  // Query all databases in PARALLEL, then pick the first hit by source priority.
+  const settled = await Promise.all(
+    SOURCES.map(async ({ host, category }) => {
+      const p = await fetchFrom(host, clean);
+      return p ? toResult(clean, category, p) : null;
+    })
+  );
+  const hit = settled.find((r): r is ProductLookup => r !== null);
+  return (
+    hit ?? { found: false, barcode: clean, name: null, brand: null, size: null, category: null, image_url: null }
+  );
 }

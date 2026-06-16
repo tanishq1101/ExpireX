@@ -23,5 +23,11 @@ Decisions: navy primary (#1D4ED8) + light-blue accent (#38BDF8); full HUD scanne
 
 Verify: build clean (type+lint) x2; deployed; `/` 200; navy tokens confirmed in live CSS; digest fn v2 ACTIVE. Visual QA blocked by sandbox preview networking — user to eyeball splash + scanner on mobile.
 
+## Barcode speed-up (2026-06-16, DONE/live)
+- OFF lookup: 3 databases now queried IN PARALLEL (was sequential, up to ~13.5s worst case → ~4.5s); timeout 7s→4.5s; added `size` (package quantity) field.
+- barcode-add: product lookup + duplicate-check run in parallel; analysis card shows INSTANTLY on identify, AI estimate streams in after (ProductAnalysisCard `estimating` placeholder + shimmer). No more waiting for the LLM before seeing the product.
+- Card now shows package size. Told user: barcode has NO MFG date or price (not fabricated).
+Build clean, deployed.
+
 ## Still pending (Wave 2, user said later)
 Inventory depth: storage locations, opened-date/PAO, batch tracking, household sharing. Also PWA + web push.

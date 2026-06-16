@@ -74,6 +74,7 @@ export type ProductLookup = {
   barcode: string;
   name: string | null;
   brand: string | null;
+  size: string | null; // package size from the product DB, e.g. "1 L", "500 g"
   category: import("@/types/database").Category | null;
   image_url: string | null;
 };

@@ -31,36 +31,30 @@ export function BarcodeAdd({
   const [pending, setPending] = useState<{ initial: ItemFormInitial; notice: string } | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
 
-  async function handleDetected(barcode: string) {
-    setBusy(true);
-    setStep("looking");
-    try {
-      // 1) Identify the product (name/brand/category/image).
-      const lookupRes = await fetch(`/api/lookup?barcode=${encodeURIComponent(barcode)}`);
-      const product = (await lookupRes.json()) as ProductLookup;
-
-      const initial: ItemFormInitial = { barcode };
-      let notice: string;
-      let confidence: ShelfLife["confidence"] = null;
-      let tips: string[] | null = null;
-
-      if (product.found && product.name) {
-        const nm = product.name;
-        const br = product.brand;
-        initial.name = br && !nm.toLowerCase().includes(br.toLowerCase()) ? `${br} ${nm}` : nm;
-        if (product.category) initial.category = product.category;
-        if (product.image_url) initial.image_url = product.image_url; // auto-attach product image
-
-        // 2) Barcodes carry no date — AI estimates a likely expiry (+ confidence + tips).
-        try {
-          const estRes = await fetch("/api/estimate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: initial.name, category: initial.category ?? "other" }),
-          });
-          const est = (await estRes.json()) as ShelfLife;
-          confidence = est.confidence ?? null;
-          tips = est.tips ?? null;
+  // Kick off the AI expiry estimate in the background and stream it into the card.
+  function runEstimate(name: string, category: string) {
+    fetch("/api/estimate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, category }),
+    })
+      .then((r) => r.json())
+      .then((est: ShelfLife) => {
+        setAnalysis((prev) =>
+          prev
+            ? {
+                ...prev,
+                expiryDate: est.expiry_date ?? null,
+                confidence: est.confidence ?? null,
+                tips: est.tips ?? null,
+                estimating: false,
+              }
+            : prev
+        );
+        setPending((prev) => {
+          if (!prev) return prev;
+          const initial = { ...prev.initial };
+          let notice: string;
           if (est.expiry_date) {
             initial.expiry_date = est.expiry_date;
             notice = `Identified "${initial.name}" by barcode. Expiry is an AI estimate${
@@ -69,53 +63,92 @@ export function BarcodeAdd({
           } else {
             notice = `Identified "${initial.name}" by barcode. Add the expiry date (scan the label or enter it).`;
           }
-        } catch {
-          notice = `Identified "${initial.name}" by barcode. Add the expiry date.`;
-        }
-        toast.success("Product identified");
-      } else {
-        notice = `Barcode ${barcode} isn't in the product database. Enter the details, or scan the label to auto-fill.`;
-        toast.message("Barcode saved — product not found in database");
-      }
-
-      // 3) Already in inventory? Offer to bump quantity instead of duplicating.
-      const { data } = await supabase
-        .from("items")
-        .select("id,name,quantity,unit,expiry_date")
-        .eq("barcode", barcode)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (data) {
-        setExisting(data as Existing);
-        setPending({ initial, notice });
-        setStep("exists");
-        return;
-      }
-
-      // 4) Identified products get the HUD analysis card; unknown barcodes go straight to the form.
-      if (product.found && product.name) {
-        setAnalysis({
-          name: initial.name ?? "",
-          imageUrl: initial.image_url ?? null,
-          category: initial.category,
-          expiryDate: initial.expiry_date ?? null,
-          confidence,
-          tips,
+          return { initial, notice };
         });
-        setPending({ initial, notice });
-        setStep("analysis");
-        return;
-      }
+      })
+      .catch(() => {
+        setAnalysis((prev) => (prev ? { ...prev, estimating: false } : prev));
+      });
+  }
 
-      onResolved(initial, notice);
+  async function handleDetected(barcode: string) {
+    setBusy(true);
+    setStep("looking");
+
+    let product: ProductLookup;
+    let existingRow: Existing | null;
+    try {
+      // Identify the product AND check for a duplicate IN PARALLEL (neither depends on the other).
+      const [p, ex] = await Promise.all([
+        fetch(`/api/lookup?barcode=${encodeURIComponent(barcode)}`).then(
+          (r) => r.json() as Promise<ProductLookup>
+        ),
+        supabase
+          .from("items")
+          .select("id,name,quantity,unit,expiry_date")
+          .eq("barcode", barcode)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+          .then((r) => (r.data as Existing) ?? null),
+      ]);
+      product = p;
+      existingRow = ex;
     } catch {
       toast.error("Lookup failed. Try again or enter details manually.");
       setStep("scan");
-    } finally {
       setBusy(false);
+      return;
     }
+
+    // Build the form prefill from product identity (dates come later from AI/OCR/manual).
+    const initial: ItemFormInitial = { barcode };
+    if (product.found && product.name) {
+      const nm = product.name;
+      const br = product.brand;
+      initial.name = br && !nm.toLowerCase().includes(br.toLowerCase()) ? `${br} ${nm}` : nm;
+      if (product.category) initial.category = product.category;
+      if (product.image_url) initial.image_url = product.image_url;
+    }
+
+    // Already in inventory → offer +1 (the form can estimate if they add as new).
+    if (existingRow) {
+      setExisting(existingRow);
+      setPending({
+        initial,
+        notice: product.found ? `Identified "${initial.name}" by barcode.` : `Barcode ${barcode} saved.`,
+      });
+      setStep("exists");
+      setBusy(false);
+      return;
+    }
+
+    // Unknown barcode → straight to the manual form.
+    if (!product.found || !product.name) {
+      setBusy(false);
+      onResolved(
+        initial,
+        `Barcode ${barcode} isn't in the product database. Enter the details, or scan the label to auto-fill.`
+      );
+      return;
+    }
+
+    // Found → show the analysis card IMMEDIATELY, then stream in the AI estimate.
+    setAnalysis({
+      name: initial.name ?? "",
+      imageUrl: initial.image_url ?? null,
+      category: initial.category,
+      size: product.size,
+      expiryDate: null,
+      confidence: null,
+      tips: null,
+      estimating: true,
+    });
+    setPending({ initial, notice: `Identified "${initial.name}" by barcode. Estimating expiry…` });
+    setStep("analysis");
+    setBusy(false);
+    toast.success("Product identified");
+    runEstimate(initial.name ?? "", initial.category ?? "other");
   }
 
   async function incrementExisting() {
