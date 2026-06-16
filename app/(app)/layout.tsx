@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4 pb-24 pt-6 sm:pb-10">
+    <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4 pb-28 pt-6 sm:pb-10">
       <AppNav email={email ?? ""} />
       <main className="flex-1">{children}</main>
     </div>

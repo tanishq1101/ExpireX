@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Menu, X, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { SettingsDrawer } from "@/components/settings-drawer";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -42,14 +42,17 @@ export function LandingNav() {
         )}
         style={scrolled ? { borderColor: "var(--glass-border)" } : undefined}
       >
-        <Link href="/" className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
-          <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-sm font-black text-primary-foreground shadow-[0_0_20px_-4px] shadow-primary/60">
-            X
-          </span>
-          <span>
-            Expire <span className="text-primary">X</span>
-          </span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <SettingsDrawer variant="landing" />
+          <Link href="/" className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-sm font-black text-primary-foreground shadow-[0_0_20px_-4px] shadow-primary/60">
+              X
+            </span>
+            <span>
+              Expire <span className="text-primary">X</span>
+            </span>
+          </Link>
+        </div>
 
         {/* Desktop links */}
         <nav className="hidden items-center gap-1 md:flex">
@@ -65,7 +68,6 @@ export function LandingNav() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
           <Link href="/login" className="hidden sm:block">
             <Button variant="outline" size="sm">
               Sign in

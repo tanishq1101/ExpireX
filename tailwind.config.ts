@@ -62,6 +62,18 @@ const config: Config = {
           "0%, 100%": { opacity: "0.5" },
           "50%": { opacity: "1" },
         },
+        "slide-in-left": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
+        "slide-out-left": {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-100%)" },
+        },
+        "fade-backdrop-in": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
       },
       animation: {
         "gradient-pan": "gradient-pan 18s ease infinite",
@@ -72,6 +84,9 @@ const config: Config = {
         shimmer: "shimmer 2.5s linear infinite",
         scanline: "scanline 2.4s ease-in-out infinite",
         "pulse-ring": "pulse-ring 2s ease-in-out infinite",
+        "slide-in-left": "slide-in-left 0.3s cubic-bezier(0.16,1,0.3,1) both",
+        "slide-out-left": "slide-out-left 0.25s cubic-bezier(0.7,0,0.84,0) both",
+        "fade-backdrop-in": "fade-backdrop-in 0.25s ease both",
       },
     },
   },
