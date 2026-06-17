@@ -178,6 +178,20 @@ export function ItemForm({
         toast.success("Item updated");
       }
 
+      // Record confirmed scan in the shared barcode catalog (fire-and-forget).
+      if (barcode) {
+        fetch("/api/catalog/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            barcode,
+            name: name.trim(),
+            category,
+            image_url: initial.image_url ?? null,
+          }),
+        }).catch(() => {});
+      }
+
       router.push("/items");
       router.refresh();
     } catch (err) {

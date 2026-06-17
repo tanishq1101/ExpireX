@@ -123,3 +123,18 @@ model NotificationLog {
   @@unique([itemId, reminderType]) // hard dedup guarantee for reminders
   @@map("notification_log")
 }
+
+model Barcodecatalog {
+  barcode        String    @id
+  name           String
+  brand          String?
+  size           String?
+  category       Category?
+  imageUrl       String?   @map("image_url")
+  source         String    @default("api")
+  confirmedCount Int       @default(0) @map("confirmed_count")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("barcode_catalog")
+}
