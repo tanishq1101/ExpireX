@@ -113,10 +113,17 @@ export function ScanUploader({
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch("/api/scan", { method: "POST", body });
+      // Respect the user's OCR-engine preference (Settings): "ai" (default) or "tesseract".
+      let engine = "ai";
+      try {
+        if (localStorage.getItem("ocrEngine") === "tesseract") engine = "tesseract";
+      } catch {
+        /* ignore */
+      }
+      const res = await fetch(`/api/scan?engine=${engine}`, { method: "POST", body });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Scan failed");
-      toast.success(`Scanned with ${json.source === "gemini" ? "Gemini" : "offline OCR"}`);
+      toast.success(`Scanned with ${json.source === "gemini" ? "AI vision" : "Tesseract OCR"}`);
       onExtracted(json.extraction as Extraction, file);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Scan failed.");

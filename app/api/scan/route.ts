@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { geminiExtractFromImage, geminiExtract, geminiEstimateShelfLife } from "@/services/gemini";
-import { tesseractExtractText } from "@/services/tesseract";
+import { tesseractExtractText, parseOcrText } from "@/services/tesseract";
 import { estimateShelfLifeLocal } from "@/lib/shelf-life";
 import { todayKolkata } from "@/lib/dates";
 import type { Extraction } from "@/lib/validators";
 import type { Category } from "@/types/database";
+
+function hasUseful(ex: Extraction): boolean {
+  return !!(ex.product_name || ex.expiry_date);
+}
 
 export const runtime = "nodejs"; // Tesseract fallback needs Node, not Edge
 export const maxDuration = 60;
@@ -32,6 +36,9 @@ export async function POST(request: Request) {
   if (file.size > MAX_BYTES)
     return NextResponse.json({ error: "Image must be under 8MB" }, { status: 400 });
 
+  // Engine preference: "ai" (Gemini vision, default & most accurate) or "tesseract" (offline OCR).
+  const engine = new URL(request.url).searchParams.get("engine") === "tesseract" ? "tesseract" : "ai";
+
   const buffer = Buffer.from(await file.arrayBuffer());
   const today = todayKolkata();
 
@@ -54,16 +61,43 @@ export async function POST(request: Request) {
       : extraction;
   }
 
-  // Primary: Gemini reads the photo and extracts in one call (no Cloud Vision / billing).
+  // ── Tesseract engine (user choice): OCR with Tesseract, structure with AI text-parse,
+  //    then a pure-offline regex parse as the final fallback. ───────────────────────────
+  if (engine === "tesseract") {
+    try {
+      const text = await tesseractExtractText(buffer);
+      let raw: Extraction;
+      try {
+        const ai = await geminiExtract(text, today); // AI structures the OCR text
+        raw = hasUseful(ai) ? ai : parseOcrText(text, today);
+      } catch {
+        raw = parseOcrText(text, today); // fully offline
+      }
+      const extraction = await withEstimatedExpiry(raw);
+      return NextResponse.json({ extraction, source: "tesseract" });
+    } catch {
+      return NextResponse.json(
+        { error: "Couldn’t read the image with Tesseract. Try a clearer photo or the AI engine." },
+        { status: 422 }
+      );
+    }
+  }
+
+  // ── AI engine (default): Gemini reads the photo directly; Tesseract is the fallback. ──
   try {
     const raw = await geminiExtractFromImage(buffer.toString("base64"), file.type, today);
     const extraction = await withEstimatedExpiry(raw);
     return NextResponse.json({ extraction, source: "gemini" });
   } catch {
-    // Fallback: offline Tesseract OCR -> Gemini text extraction.
     try {
       const text = await tesseractExtractText(buffer);
-      const raw = await geminiExtract(text, today);
+      let raw: Extraction;
+      try {
+        const ai = await geminiExtract(text, today);
+        raw = hasUseful(ai) ? ai : parseOcrText(text, today);
+      } catch {
+        raw = parseOcrText(text, today);
+      }
       const extraction = await withEstimatedExpiry(raw);
       return NextResponse.json({ extraction, source: "tesseract" });
     } catch {

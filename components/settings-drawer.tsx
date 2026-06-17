@@ -221,6 +221,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
 
   /* General Settings state */
   const [defaultCategory, setDefaultCategory] = React.useState<Category>("food");
+  const [ocrEngine, setOcrEngine] = React.useState<"ai" | "tesseract">("ai");
   const [emailReminders, setEmailReminders] = React.useState(true);
   const [emailRemindersBusy, setEmailRemindersBusy] = React.useState(false);
   const [settingsLoaded, setSettingsLoaded] = React.useState(false);
@@ -250,6 +251,8 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
     try {
       const saved = localStorage.getItem("defaultCategory") as Category | null;
       if (saved) setDefaultCategory(saved);
+      const eng = localStorage.getItem("ocrEngine");
+      if (eng === "tesseract" || eng === "ai") setOcrEngine(eng);
     } catch { /* ignore */ }
 
     if (user?.id && !settingsLoaded) {
@@ -268,6 +271,11 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
   const changeDefaultCategory = (cat: Category) => {
     setDefaultCategory(cat);
     try { localStorage.setItem("defaultCategory", cat); } catch { /* ignore */ }
+  };
+
+  const changeOcrEngine = (eng: "ai" | "tesseract") => {
+    setOcrEngine(eng);
+    try { localStorage.setItem("ocrEngine", eng); } catch { /* ignore */ }
   };
 
   const toggleEmailReminders = async () => {
@@ -509,6 +517,29 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                           <option key={key} value={key}>{meta.label}</option>
                         )
                       )}
+                    </Select>
+                  </div>
+
+                  {/* Scan / OCR engine */}
+                  <div className="mb-1 rounded-xl px-3 py-3">
+                    <div className="mb-2 flex items-center gap-3">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface/[0.06] text-primary">
+                        <Sliders className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <div className="text-sm font-medium text-foreground">Scan engine</div>
+                        <div className="text-[11px] text-muted">
+                          AI vision is more accurate; Tesseract works offline
+                        </div>
+                      </div>
+                    </div>
+                    <Select
+                      value={ocrEngine}
+                      onChange={(e) => changeOcrEngine(e.target.value as "ai" | "tesseract")}
+                      className="text-sm"
+                    >
+                      <option value="ai">AI vision (recommended)</option>
+                      <option value="tesseract">Tesseract OCR (offline)</option>
                     </Select>
                   </div>
 
