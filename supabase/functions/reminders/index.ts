@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
   // exactly one of the reminder offset dates, with the owner's email.
   const { data: items, error } = await supabase
     .from("items")
-    .select("id, name, expiry_date, effective_expiry, user_id, users(email)")
+    .select("id, name, expiry_date, effective_expiry, user_id, users(email, email_reminders_enabled)")
     .in("effective_expiry", dueDates);
 
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -109,8 +109,9 @@ Deno.serve(async (req) => {
     if (sent.has(`${item.id}:${type}`)) continue;
 
     // deno-lint-ignore no-explicit-any
-    const email = (item as any).users?.email as string | undefined;
-    if (!email) continue;
+    const userRow = (item as any).users as { email?: string; email_reminders_enabled?: boolean } | undefined;
+    const email = userRow?.email;
+    if (!email || userRow?.email_reminders_enabled === false) continue;
 
     const daysLeft = REMINDER_OFFSETS.find((o) => o.type === type)!.days;
     try {

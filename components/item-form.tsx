@@ -70,7 +70,10 @@ export function ItemForm({
   const { userId } = useAuth();
 
   const [name, setName] = useState(initial.name ?? "");
-  const [category, setCategory] = useState<Category>((initial.category as Category) ?? "food");
+  const [category, setCategory] = useState<Category>(() => {
+    if (initial.category) return initial.category as Category;
+    try { return (localStorage.getItem("defaultCategory") as Category) ?? "food"; } catch { return "food"; }
+  });
   const [expiry, setExpiry] = useState(initial.expiry_date ?? "");
   const [mfg, setMfg] = useState(initial.manufacture_date ?? "");
   const [quantity, setQuantity] = useState(initial.quantity != null ? String(initial.quantity) : "1");

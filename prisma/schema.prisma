@@ -36,9 +36,10 @@ enum ReminderType {
 }
 
 model User {
-  id        String   @id // Clerk user id (text, e.g. user_2ab...)
-  email     String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                    String   @id // Clerk user id (text, e.g. user_2ab...)
+  email                 String
+  emailRemindersEnabled Boolean  @default(true) @map("email_reminders_enabled")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   items            Item[]
   notificationLogs NotificationLog[]

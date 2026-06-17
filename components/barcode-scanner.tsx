@@ -15,6 +15,27 @@ type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => BarcodeDetecto
 
 const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"];
 
+// GTIN (EAN-8/UPC-A/EAN-13/GTIN-14) mod-10 check digit. Rejects misreads of numeric codes.
+function gtinChecksumOk(s: string): boolean {
+  const d = s.split("").map(Number);
+  if (d.some(Number.isNaN)) return false;
+  const check = d.pop()!;
+  let sum = 0;
+  for (let i = d.length - 1, w = 3; i >= 0; i--, w = w === 3 ? 1 : 3) sum += d[i] * w;
+  return (10 - (sum % 10)) % 10 === check;
+}
+
+// Accept a scan only if it looks real: valid GTIN checksum for standard lengths,
+// otherwise a reasonable-length numeric/alphanumeric code.
+function isValidScan(raw: string): boolean {
+  const s = raw.trim();
+  if (/^\d+$/.test(s)) {
+    if ([8, 12, 13, 14].includes(s.length)) return gtinChecksumOk(s);
+    return s.length >= 6;
+  }
+  return s.length >= 4;
+}
+
 export function BarcodeScanner({
   onDetected,
   onCancel,
@@ -27,6 +48,9 @@ export function BarcodeScanner({
   const rafRef = useRef<number | null>(null);
   const zxingControlsRef = useRef<{ stop: () => void } | null>(null);
   const doneRef = useRef(false);
+  // Require two consecutive identical reads before accepting (kills single-frame misreads).
+  const lastCandidateRef = useRef<string>("");
+  const candidateCountRef = useRef(0);
 
   const [starting, setStarting] = useState(true);
   const [cameraFailed, setCameraFailed] = useState(false);
@@ -52,17 +76,41 @@ export function BarcodeScanner({
     onDetected(value.trim());
   }
 
+  // Gate every raw decode: ignore invalid reads, and only accept after two matching ones.
+  function consider(raw: string) {
+    const s = raw.trim();
+    if (!isValidScan(s)) return;
+    if (s === lastCandidateRef.current) candidateCountRef.current += 1;
+    else {
+      lastCandidateRef.current = s;
+      candidateCountRef.current = 1;
+    }
+    if (candidateCountRef.current >= 2) finish(s);
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     async function startNative(Detector: BarcodeDetectorCtor) {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
         audio: false,
       });
       if (cancelled) return stream.getTracks().forEach((t) => t.stop());
       streamRef.current = stream;
       setUsingNative(true);
+      // Best-effort continuous autofocus for sharper frames (ignored where unsupported).
+      try {
+        await stream.getVideoTracks()[0]?.applyConstraints({
+          advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet],
+        });
+      } catch {
+        /* not supported — fine */
+      }
       const video = videoRef.current!;
       video.srcObject = stream;
       await video.play().catch(() => {});
@@ -72,12 +120,12 @@ export function BarcodeScanner({
         try {
           if (video.readyState >= 2) {
             const codes = await detector.detect(video);
-            if (codes[0]?.rawValue) return finish(codes[0].rawValue);
+            if (codes[0]?.rawValue) consider(codes[0].rawValue);
           }
         } catch {
           /* transient decode error — keep scanning */
         }
-        rafRef.current = requestAnimationFrame(tick);
+        if (!doneRef.current && !cancelled) rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
     }
@@ -90,7 +138,7 @@ export function BarcodeScanner({
         undefined,
         videoRef.current!,
         (result) => {
-          if (result) finish(result.getText());
+          if (result) consider(result.getText());
         }
       );
     }
@@ -145,7 +193,7 @@ export function BarcodeScanner({
     try {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: next } },
+        video: { facingMode: { ideal: next }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
       streamRef.current = stream;
