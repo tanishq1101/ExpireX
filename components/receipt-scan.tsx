@@ -7,6 +7,7 @@ import { Loader2, ReceiptText, Trash2, Save } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { itemFormSchema, type ReceiptItem } from "@/lib/validators";
+import { fetchJson } from "@/lib/fetch-json";
 import { CATEGORIES } from "@/lib/status";
 import { CATEGORY_META } from "@/lib/categories";
 import type { Category } from "@/types/database";
@@ -42,9 +43,10 @@ export function ReceiptScan() {
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch("/api/receipt", { method: "POST", body });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Couldn’t read the receipt");
+      const json = await fetchJson<{ items?: ReceiptItem[] }>("/api/receipt", {
+        method: "POST",
+        body,
+      });
       const items = (json.items ?? []) as ReceiptItem[];
       if (items.length === 0) {
         toast.error("No products found. Try a clearer photo or add items manually.");

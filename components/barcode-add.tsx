@@ -8,6 +8,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { relativeLabel, todayKolkata } from "@/lib/dates";
 import type { ProductLookup, ShelfLife, Extraction } from "@/lib/validators";
+import { fetchJson } from "@/lib/fetch-json";
 import { initialFromExtraction } from "@/lib/extraction";
 import type { ItemFormInitial } from "@/components/item-form";
 import { BarcodeScanner } from "@/components/barcode-scanner";
@@ -38,12 +39,11 @@ export function BarcodeAdd({
 
   // Kick off the AI expiry estimate in the background and stream it into the card.
   function runEstimate(name: string, category: string) {
-    fetch("/api/estimate", {
+    fetchJson<ShelfLife>("/api/estimate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, category }),
     })
-      .then((r) => r.json())
       .then((est: ShelfLife) => {
         setAnalysis((prev) =>
           prev
@@ -85,9 +85,7 @@ export function BarcodeAdd({
     try {
       // Identify the product AND check for a duplicate IN PARALLEL (neither depends on the other).
       const [p, ex] = await Promise.all([
-        fetch(`/api/lookup?barcode=${encodeURIComponent(barcode)}`).then(
-          (r) => r.json() as Promise<ProductLookup>
-        ),
+        fetchJson<ProductLookup>(`/api/lookup?barcode=${encodeURIComponent(barcode)}`),
         supabase
           .from("items")
           .select("id,name,quantity,unit,expiry_date")

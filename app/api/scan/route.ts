@@ -39,6 +39,7 @@ export async function POST(request: Request) {
   // Engine preference: "ai" (Gemini vision, default & most accurate) or "tesseract" (offline OCR).
   const engine = new URL(request.url).searchParams.get("engine") === "tesseract" ? "tesseract" : "ai";
 
+  try {
   const buffer = Buffer.from(await file.arrayBuffer());
   const today = todayKolkata();
 
@@ -106,5 +107,11 @@ export async function POST(request: Request) {
         { status: 422 }
       );
     }
+  }
+  } catch {
+    return NextResponse.json(
+      { error: "Scan failed unexpectedly. Please try again or enter details manually." },
+      { status: 500 }
+    );
   }
 }

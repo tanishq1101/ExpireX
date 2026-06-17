@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Camera, ImageUp, Loader2, ScanLine, X, RotateCcw, SwitchCamera } from "lucide-react";
 import type { Extraction } from "@/lib/validators";
+import { fetchJson } from "@/lib/fetch-json";
 import { Button } from "@/components/ui/button";
 
 type Facing = "environment" | "user";
@@ -120,11 +121,12 @@ export function ScanUploader({
       } catch {
         /* ignore */
       }
-      const res = await fetch(`/api/scan?engine=${engine}`, { method: "POST", body });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Scan failed");
+      const json = await fetchJson<{ extraction: Extraction; source?: string }>(
+        `/api/scan?engine=${engine}`,
+        { method: "POST", body }
+      );
       toast.success(`Scanned with ${json.source === "gemini" ? "AI vision" : "Tesseract OCR"}`);
-      onExtracted(json.extraction as Extraction, file);
+      onExtracted(json.extraction, file);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Scan failed.");
     } finally {

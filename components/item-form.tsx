@@ -8,6 +8,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { uploadItemImage } from "@/lib/storage";
 import { externalImageUrl } from "@/lib/utils";
+import { fetchJson } from "@/lib/fetch-json";
 import { addDays } from "@/lib/dates";
 import { itemFormSchema, type Extraction, type ShelfLife } from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
@@ -98,13 +99,12 @@ export function ItemForm({
     }
     setEstimating(true);
     try {
-      const res = await fetch("/api/estimate", {
+      const est = await fetchJson<ShelfLife & { source?: string }>("/api/estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), category, base_date: mfg || undefined }),
       });
-      const est = (await res.json()) as ShelfLife & { source?: string };
-      if (!res.ok || !est.expiry_date) {
+      if (!est.expiry_date) {
         toast.error("Couldn't estimate a date for this item — please enter it.");
         return;
       }

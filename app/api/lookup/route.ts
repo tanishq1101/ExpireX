@@ -26,49 +26,63 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Provide a valid numeric barcode" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  try {
+    const admin = createAdminClient();
 
-  // ── 1. Catalog hit ─────────────────────────────────────────────────────────
-  const { data: cached } = await admin
-    .from("barcode_catalog")
-    .select("name, brand, size, category, image_url")
-    .eq("barcode", barcode)
-    .maybeSingle<CatalogRow>();
+    // ── 1. Catalog hit ───────────────────────────────────────────────────────
+    const { data: cached } = await admin
+      .from("barcode_catalog")
+      .select("name, brand, size, category, image_url")
+      .eq("barcode", barcode)
+      .maybeSingle<CatalogRow>();
 
-  if (cached) {
+    if (cached) {
+      return NextResponse.json({
+        found: true,
+        barcode,
+        name: cached.name,
+        brand: cached.brand ?? null,
+        size: cached.size ?? null,
+        category: cached.category ?? null,
+        image_url: cached.image_url ?? null,
+        fromCatalog: true,
+      });
+    }
+
+    // ── 2. External APIs ──────────────────────────────────────────────────────
+    const product = await lookupBarcode(barcode);
+
+    // ── 3. Cache on hit (fire-and-forget — don't block the response) ──────────
+    if (product.found && product.name) {
+      void admin
+        .from("barcode_catalog")
+        .upsert(
+          {
+            barcode,
+            name: product.name,
+            brand: product.brand ?? null,
+            size: product.size ?? null,
+            category: product.category ?? null,
+            image_url: product.image_url ?? null,
+            source: "api",
+            confirmed_count: 0,
+          },
+          { onConflict: "barcode" }
+        )
+        .then(() => {});
+    }
+
+    return NextResponse.json(product);
+  } catch {
+    // Never leak a non-JSON 500 to the client — return a clean "not found" shape.
     return NextResponse.json({
-      found: true,
+      found: false,
       barcode,
-      name: cached.name,
-      brand: cached.brand ?? null,
-      size: cached.size ?? null,
-      category: cached.category ?? null,
-      image_url: cached.image_url ?? null,
-      fromCatalog: true,
+      name: null,
+      brand: null,
+      size: null,
+      category: null,
+      image_url: null,
     });
   }
-
-  // ── 2. External APIs ────────────────────────────────────────────────────────
-  const product = await lookupBarcode(barcode);
-
-  // ── 3. Cache on hit (fire-and-forget — don't block the response) ────────────
-  if (product.found && product.name) {
-    void (async () => {
-      await admin.from("barcode_catalog").upsert(
-        {
-          barcode,
-          name: product.name,
-          brand: product.brand ?? null,
-          size: product.size ?? null,
-          category: product.category ?? null,
-          image_url: product.image_url ?? null,
-          source: "api",
-          confirmed_count: 0,
-        },
-        { onConflict: "barcode" }
-      );
-    })();
-  }
-
-  return NextResponse.json(product);
 }
