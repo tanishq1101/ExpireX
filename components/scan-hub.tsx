@@ -42,8 +42,12 @@ export function ScanHub({ compact = false }: { compact?: boolean }) {
   // Chooser — the scan-first screen.
   if (!mode) {
     return (
-      <div className={cn("grid gap-3", compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4")}>
-        {OPTIONS.map(({ id, label, desc, icon: Icon }) => (
+      <div className="space-y-3">
+        <p className="rounded-xl border border-border bg-surface/[0.04] px-3 py-2 text-center text-xs text-muted">
+          Scan items with an expiry: 🍎 Food · 💄 Cosmetics · 💊 Medicine
+        </p>
+        <div className={cn("grid gap-3", compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4")}>
+          {OPTIONS.map(({ id, label, desc, icon: Icon }) => (
           <button
             key={id}
             type="button"
@@ -56,7 +60,8 @@ export function ScanHub({ compact = false }: { compact?: boolean }) {
             <span className="text-sm font-semibold">{label}</span>
             {!compact && <span className="text-xs text-muted">{desc}</span>}
           </button>
-        ))}
+          ))}
+        </div>
       </div>
     );
   }

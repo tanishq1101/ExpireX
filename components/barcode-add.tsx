@@ -13,6 +13,7 @@ import { initialFromExtraction } from "@/lib/extraction";
 import type { ItemFormInitial } from "@/components/item-form";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import { ScanUploader } from "@/components/scan-uploader";
+import { ScanRejected } from "@/components/scan-rejected";
 import { ProductAnalysisCard, type Analysis } from "@/components/product-analysis-card";
 import { Button } from "@/components/ui/button";
 
@@ -28,9 +29,10 @@ export function BarcodeAdd({
   const { userId } = useAuth();
 
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState<"intro" | "scan" | "looking" | "analysis" | "exists" | "ocr">(
-    "intro"
-  );
+  const [step, setStep] = useState<
+    "intro" | "scan" | "looking" | "analysis" | "exists" | "ocr" | "rejected"
+  >("intro");
+  const [rejectedName, setRejectedName] = useState<string | null>(null);
   // When the same barcode already exists, hold the new-item data so the user can still add it fresh.
   const [existing, setExisting] = useState<Existing | null>(null);
   const [pending, setPending] = useState<{ initial: ItemFormInitial; notice: string } | null>(null);
@@ -100,6 +102,14 @@ export function BarcodeAdd({
     } catch {
       toast.error("Lookup failed. Try again or enter details manually.");
       setStep("scan");
+      setBusy(false);
+      return;
+    }
+
+    // Reject products that aren't food/cosmetics/medicine (electronics, books, etc.).
+    if (product.found && product.supported === false) {
+      setRejectedName(product.name);
+      setStep("rejected");
       setBusy(false);
       return;
     }
@@ -224,6 +234,18 @@ export function BarcodeAdd({
           Cancel
         </Button>
       </div>
+    );
+  }
+
+  if (step === "rejected") {
+    return (
+      <ScanRejected
+        detected={rejectedName}
+        onRetry={() => {
+          setRejectedName(null);
+          setStep("intro");
+        }}
+      />
     );
   }
 

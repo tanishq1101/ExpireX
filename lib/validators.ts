@@ -49,6 +49,9 @@ export const extractionSchema = z.object({
   unit: z.string().max(40).nullable().optional(),
   // true when expiry_date was AI-estimated (no printed date found), so the UI can flag it.
   estimated: z.boolean().optional(),
+  // Eligibility: only food/cosmetics/medicine are trackable; everything else is rejected.
+  item_type: z.enum(["food", "cosmetics", "medicine", "unsupported"]).nullable().optional(),
+  detected: z.string().max(60).nullable().optional(),
 });
 
 export type Extraction = z.infer<typeof extractionSchema>;
@@ -90,4 +93,6 @@ export type ProductLookup = {
   size: string | null; // package size from the product DB, e.g. "1 L", "500 g"
   category: import("@/types/database").Category | null;
   image_url: string | null;
+  // false when the resolved product is clearly NOT an expiry item (electronics, books…)
+  supported?: boolean;
 };

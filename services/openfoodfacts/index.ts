@@ -71,6 +71,10 @@ function mapUpcCategory(cat: string): Category {
   return "other";
 }
 
+// Categories that have no expiry/shelf life — reject these at scan time.
+const UNSUPPORTED_RE =
+  /(electronic|computer|laptop|phone|mobile|camera|headphone|earbud|charger|cable|tv|television|appliance|book|media|clothing|apparel|shoe|footwear|furniture|toy|\bgame|stationery|office|hardware|\btool|automotive|vehicle|jewel|watch|sport|luggage|garden|decor)/i;
+
 // UPCitemdb trial endpoint: free, key-less, broad general-retail coverage (rate-limited).
 // Used as an extra fallback so far more barcodes resolve than Open Food Facts alone.
 async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
@@ -86,14 +90,16 @@ async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
     const it = json.items?.[0];
     const name = (it?.title || "").trim();
     if (!name) return null;
+    const catStr = it?.category || "";
     return {
       found: true,
       barcode,
       name,
       brand: it?.brand?.trim() || null,
       size: null,
-      category: mapUpcCategory(it?.category || ""),
+      category: mapUpcCategory(catStr),
       image_url: it?.images?.[0] || null,
+      supported: !UNSUPPORTED_RE.test(catStr), // electronics/books/etc. → rejected
     };
   } catch {
     return null;

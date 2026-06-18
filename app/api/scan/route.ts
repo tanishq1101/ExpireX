@@ -62,6 +62,15 @@ export async function POST(request: Request) {
       : extraction;
   }
 
+  // Reject items that aren't food/cosmetics/medicine; otherwise return the filled extraction.
+  async function ok(raw: Extraction, source: string) {
+    if (raw.item_type === "unsupported") {
+      return NextResponse.json({ rejected: true, detected: raw.detected ?? null });
+    }
+    const extraction = await withEstimatedExpiry(raw);
+    return NextResponse.json({ extraction, source });
+  }
+
   // ── Tesseract engine (user choice): OCR with Tesseract, structure with AI text-parse,
   //    then a pure-offline regex parse as the final fallback. ───────────────────────────
   if (engine === "tesseract") {
@@ -74,8 +83,7 @@ export async function POST(request: Request) {
       } catch {
         raw = parseOcrText(text, today); // fully offline
       }
-      const extraction = await withEstimatedExpiry(raw);
-      return NextResponse.json({ extraction, source: "tesseract" });
+      return ok(raw, "tesseract");
     } catch {
       return NextResponse.json(
         { error: "Couldn’t read the image with Tesseract. Try a clearer photo or the AI engine." },
@@ -87,8 +95,7 @@ export async function POST(request: Request) {
   // ── AI engine (default): Gemini reads the photo directly; Tesseract is the fallback. ──
   try {
     const raw = await geminiExtractFromImage(buffer.toString("base64"), file.type, today);
-    const extraction = await withEstimatedExpiry(raw);
-    return NextResponse.json({ extraction, source: "gemini" });
+    return ok(raw, "gemini");
   } catch {
     try {
       const text = await tesseractExtractText(buffer);
@@ -99,8 +106,7 @@ export async function POST(request: Request) {
       } catch {
         raw = parseOcrText(text, today);
       }
-      const extraction = await withEstimatedExpiry(raw);
-      return NextResponse.json({ extraction, source: "tesseract" });
+      return ok(raw, "tesseract");
     } catch {
       return NextResponse.json(
         { error: "Couldn’t read the image. Try a clearer photo or enter details manually." },

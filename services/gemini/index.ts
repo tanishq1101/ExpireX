@@ -20,6 +20,14 @@ const RULES = `Return ONLY JSON with exactly these keys:
 - "category": one of [${CATEGORIES.join(", ")}] | null
 - "quantity": number | null       (net amount as a number, e.g. 500 for "500 g", 1 for "1 L")
 - "unit": string | null           (the unit only, e.g. "g", "ml", "L", "kg", "tablets", "pcs")
+- "item_type": "food" | "cosmetics" | "medicine" | "unsupported"  (what KIND of object this is)
+- "detected": string | null       (1-3 word label of the object, e.g. "Laptop", "Shampoo bottle", "Apple")
+
+Eligibility (item_type):
+- food = any edible/drinkable item: fresh fruit & vegetables, packaged/canned/frozen food, snacks, beverages.
+- cosmetics = skincare, makeup, hair/personal care (cream, shampoo, soap, sunscreen, lipstick, toothpaste…).
+- medicine = tablets, capsules, syrups, ointments, supplements, healthcare products.
+- unsupported = ANYTHING ELSE (electronics, phones, laptops, chargers, headphones, books, clothes, shoes, furniture, toys, stationery, vehicles, home decor, random objects).
 
 Rules:
 - Read EVERYTHING printed. Works for food, medicines, cosmetics/makeup/creams/powders, and packaged goods.

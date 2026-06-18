@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Camera, ImageUp, Loader2, ScanLine, X, RotateCcw, SwitchCamera } from "lucide-react";
 import type { Extraction } from "@/lib/validators";
 import { fetchJson } from "@/lib/fetch-json";
+import { ScanRejected } from "@/components/scan-rejected";
 import { Button } from "@/components/ui/button";
 
 type Facing = "environment" | "user";
@@ -24,6 +25,7 @@ export function ScanUploader({
   const [starting, setStarting] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [facing, setFacing] = useState<Facing>("environment");
+  const [rejected, setRejected] = useState<{ detected: string | null } | null>(null);
 
   // Release the camera when we leave the component or stop using it.
   function stopCamera() {
@@ -106,6 +108,7 @@ export function ScanUploader({
   function reset() {
     setFile(null);
     setPreview(null);
+    setRejected(null);
   }
 
   async function scan() {
@@ -121,10 +124,17 @@ export function ScanUploader({
       } catch {
         /* ignore */
       }
-      const json = await fetchJson<{ extraction: Extraction; source?: string }>(
-        `/api/scan?engine=${engine}`,
-        { method: "POST", body }
-      );
+      const json = await fetchJson<{
+        extraction?: Extraction;
+        source?: string;
+        rejected?: boolean;
+        detected?: string | null;
+      }>(`/api/scan?engine=${engine}`, { method: "POST", body });
+      if (json.rejected) {
+        setRejected({ detected: json.detected ?? null });
+        return;
+      }
+      if (!json.extraction) throw new Error("Couldn’t read the image.");
       toast.success(`Scanned with ${json.source === "gemini" ? "AI vision" : "Tesseract OCR"}`);
       onExtracted(json.extraction, file);
     } catch (err) {
@@ -132,6 +142,10 @@ export function ScanUploader({
     } finally {
       setScanning(false);
     }
+  }
+
+  if (rejected) {
+    return <ScanRejected detected={rejected.detected} onRetry={reset} />;
   }
 
   return (
