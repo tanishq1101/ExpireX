@@ -33,7 +33,7 @@ export type ItemFormInitial = Partial<
     | "unit"
     | "notes"
     | "barcode"
-    | "location"
+
     | "opened_date"
     | "open_within_days"
     | "image_url"
@@ -41,16 +41,6 @@ export type ItemFormInitial = Partial<
 >;
 
 const UNIT_SUGGESTIONS = ["pcs", "ml", "L", "g", "kg", "pack", "box", "bottle", "strip", "tablets"];
-const LOCATION_SUGGESTIONS = [
-  "Fridge",
-  "Freezer",
-  "Pantry",
-  "Kitchen cabinet",
-  "Medicine box",
-  "Bathroom",
-  "Wardrobe",
-  "Desk",
-];
 
 export function ItemForm({
   mode,
@@ -81,7 +71,7 @@ export function ItemForm({
   const [unit, setUnit] = useState(initial.unit ?? "");
   const [notes, setNotes] = useState(initial.notes ?? "");
   const [barcode] = useState(initial.barcode ?? "");
-  const [location, setLocation] = useState(initial.location ?? "");
+
   const [openedDate, setOpenedDate] = useState(initial.opened_date ?? "");
   const [openWithin, setOpenWithin] = useState(
     initial.open_within_days != null ? String(initial.open_within_days) : ""
@@ -148,7 +138,7 @@ export function ItemForm({
       unit: unit || null,
       notes: notes || null,
       barcode: barcode || null,
-      location: location || null,
+
       opened_date: openedDate || null,
       open_within_days: openWithin || null,
     });
@@ -336,21 +326,6 @@ export function ItemForm({
         </div>
       </div>
 
-      <div>
-        <Label htmlFor="location">Storage location</Label>
-        <Input
-          id="location"
-          list="location-suggestions"
-          value={location ?? ""}
-          onChange={(e) => setLocation(e.target.value)}
-          placeholder="Fridge, Pantry, Medicine box…"
-        />
-        <datalist id="location-suggestions">
-          {LOCATION_SUGGESTIONS.map((l) => (
-            <option key={l} value={l} />
-          ))}
-        </datalist>
-      </div>
 
       {/* Opened tracking — shortens the effective expiry once a product is opened. */}
       <div className="space-y-3 rounded-xl border border-border p-3">
