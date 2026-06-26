@@ -83,6 +83,15 @@ export async function POST(request: Request) {
       } catch {
         raw = parseOcrText(text, today); // fully offline
       }
+      // Offline OCR can't tell a gadget from a label; if it read nothing useful,
+      // fall back to AI vision so durable goods (laptop, phone…) are still rejected.
+      if (!hasUseful(raw) && raw.item_type !== "unsupported") {
+        try {
+          return ok(await geminiExtractFromImage(buffer.toString("base64"), file.type, today), "gemini");
+        } catch {
+          /* keep the offline result */
+        }
+      }
       return ok(raw, "tesseract");
     } catch {
       return NextResponse.json(
