@@ -52,6 +52,10 @@ export const extractionSchema = z.object({
   // Eligibility: only food/cosmetics/medicine are trackable; everything else is rejected.
   item_type: z.enum(["food", "cosmetics", "medicine", "unsupported"]).nullable().optional(),
   detected: z.string().max(60).nullable().optional(),
+  // Visual freshness verdict for fresh UNPACKAGED perishables (raw meat/fish, eggs, loose
+  // fruit & vegetables) that carry no printed date — judged from the photo.
+  freshness: z.enum(["fresh", "use_soon", "spoiled"]).nullable().optional(),
+  freshness_note: z.string().max(200).nullable().optional(),
 });
 
 export type Extraction = z.infer<typeof extractionSchema>;

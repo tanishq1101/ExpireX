@@ -22,6 +22,9 @@ const RULES = `Return ONLY JSON with exactly these keys:
 - "unit": string | null           (the unit only, e.g. "g", "ml", "L", "kg", "tablets", "pcs")
 - "item_type": "food" | "cosmetics" | "medicine" | "unsupported"  (what KIND of object this is)
 - "detected": string | null       (1-3 word label of the object, e.g. "Laptop", "Shampoo bottle", "Apple")
+- "estimated": boolean | null      (true if you ESTIMATED expiry_date rather than reading a printed one)
+- "freshness": "fresh" | "use_soon" | "spoiled" | null  (ONLY for fresh UNPACKAGED perishables, judged by eye)
+- "freshness_note": string | null  (short visual note, e.g. "bright red & firm", "yellowing leaves", "shells intact")
 
 Eligibility (item_type):
 - food = any edible/drinkable item: fresh fruit & vegetables, packaged/canned/frozen food, snacks, beverages.
@@ -35,6 +38,8 @@ Rules:
 - Prefer "best before"/"exp"/"use by"/"use before" for expiry; "mfg"/"mfd"/"pkd"/"packed on" for manufacture.
 - Medicines: read the "EXP" date; set category to "medicine".
 - Cosmetics/makeup/skincare: set category to "cosmetics". If only a Period-After-Opening symbol ("12M", "24M") is shown and there is no printed expiry, leave expiry_date null.
+- FRESH UNPACKAGED PERISHABLES (raw chicken/goat/meat/fish, eggs, loose fruit & vegetables) usually have NO printed date. For these: set category "food"; visually judge "freshness" + a short "freshness_note"; ESTIMATE "expiry_date" as today + the typical safe refrigerated life ADJUSTED for what you see — spoiled → today or +1 day; use_soon → a few days; fresh → the full typical life (e.g. eggs ~3 weeks, leafy greens ~5 days, raw chicken ~2 days, root vegetables ~2 weeks); set "estimated": true. If countable (e.g. eggs), estimate "quantity".
+- For packaged goods with a printed date, leave "freshness"/"freshness_note" null and use the printed expiry.
 - If a value is unreadable or absent, use null. Never invent a value.`;
 
 function model() {
