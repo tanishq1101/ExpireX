@@ -62,10 +62,20 @@ export async function POST(request: Request) {
       : extraction;
   }
 
-  // Reject items that aren't food/cosmetics/medicine; otherwise return the filled extraction.
+  // Only consumables (food/cosmetics/medicine) have an expiry. AI vision ALWAYS returns an
+  // item_type, so for a photo scan we ALLOW only those three and reject everything else —
+  // including blank/uncertain results (a laptop or phone often comes back unsure rather than
+  // the exact word "unsupported"). Tesseract may legitimately omit item_type for a real
+  // label, so there we only hard-reject an explicit "unsupported".
   async function ok(raw: Extraction, source: string) {
-    if (raw.item_type === "unsupported") {
-      return NextResponse.json({ rejected: true, detected: raw.detected ?? null });
+    const consumable =
+      raw.item_type === "food" || raw.item_type === "cosmetics" || raw.item_type === "medicine";
+    const reject = raw.item_type === "unsupported" || (source === "gemini" && !consumable);
+    if (reject) {
+      return NextResponse.json({
+        rejected: true,
+        detected: raw.detected ?? raw.product_name ?? null,
+      });
     }
     const extraction = await withEstimatedExpiry(raw);
     return NextResponse.json({ extraction, source });
