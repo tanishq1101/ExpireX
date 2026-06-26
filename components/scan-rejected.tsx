@@ -4,11 +4,11 @@ import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const SUPPORTED = [
-  { emoji: "🍎", label: "Food", ex: "Fruits, veg, snacks, drinks, packaged food" },
+  { emoji: "🍎", label: "Food", ex: "Fruits, veg, meat, eggs, drinks, baby food" },
   { emoji: "💄", label: "Cosmetics", ex: "Shampoo, face wash, sunscreen, makeup" },
   { emoji: "💊", label: "Medicine", ex: "Tablets, syrups, supplements" },
 ];
-const UNSUPPORTED = ["Laptop", "Phone", "TV", "Headphones", "Books", "Charger", "Shoes", "Furniture"];
+const UNSUPPORTED = ["Phone", "Keyboard", "Mouse", "Bag", "Pen", "Clothes", "Bed sheet", "Empty bottle"];
 
 export function ScanRejected({
   detected,
@@ -24,15 +24,19 @@ export function ScanRejected({
       </div>
 
       <div>
-        <h2 className="text-lg font-bold">This item has no expiry tracking support</h2>
+        <h2 className="text-lg font-bold">This item doesn’t have an expiry date</h2>
         <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
           {detected ? (
             <>
-              Detected <span className="font-medium text-foreground">{detected}</span>. Expire X
-              tracks only products with an expiry or shelf life.
+              <span className="font-medium text-foreground">{detected}</span> doesn’t expire, so
+              there’s nothing to track. Expire X is only for things that go off — food, drinks,
+              medicines and cosmetics.
             </>
           ) : (
-            <>Expire X tracks only products with an expiry or shelf life.</>
+            <>
+              This doesn’t expire, so there’s nothing to track. Expire X is only for things that go
+              off — food, drinks, medicines and cosmetics.
+            </>
           )}
         </p>
       </div>

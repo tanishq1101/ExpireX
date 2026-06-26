@@ -26,11 +26,16 @@ const RULES = `Return ONLY JSON with exactly these keys:
 - "freshness": "fresh" | "use_soon" | "spoiled" | null  (ONLY for fresh UNPACKAGED perishables, judged by eye)
 - "freshness_note": string | null  (short visual note, e.g. "bright red & firm", "yellowing leaves", "shells intact")
 
-Eligibility (item_type):
-- food = any edible/drinkable item: fresh fruit & vegetables, packaged/canned/frozen food, snacks, beverages.
-- cosmetics = skincare, makeup, hair/personal care (cream, shampoo, soap, sunscreen, lipstick, toothpaste…).
-- medicine = tablets, capsules, syrups, ointments, supplements, healthcare products.
-- unsupported = ANYTHING ELSE (electronics, phones, laptops, chargers, headphones, books, clothes, shoes, furniture, toys, stationery, vehicles, home decor, random objects).
+Eligibility (item_type) — only things that are CONSUMED and have a shelf life are trackable:
+- food = edible/drinkable CONSUMABLES: fresh fruit & vegetables, raw meat/chicken/fish, eggs, packaged/canned/frozen food, snacks, beverages, milk, juice, baby formula & baby food.
+- cosmetics = skincare/makeup/personal-care CONSUMABLES (cream, shampoo, soap, sunscreen, lipstick, toothpaste…).
+- medicine = tablets, capsules, syrups, ointments, supplements, healthcare consumables.
+- unsupported = ANYTHING that is NOT consumed / has NO expiry. This includes ALL durable goods: electronics & gadgets (mobile phone, laptop, keyboard, mouse, charger, headphones, TV), clothes & footwear (pants, shirts, shoes), bags & accessories, stationery (pens, notebooks), home/kitchen goods (bed sheets, towels, utensils, cups, plates), toys, books, furniture, vehicles, AND empty/reusable CONTAINERS (an empty bottle, a water bottle, a feeding/baby bottle with no formula in it, a flask, an empty box).
+
+CRITICAL — judge by the CONTENT, not the container or packaging:
+- A SEALED drink / juice / milk / baby formula = "food".  An EMPTY or reusable bottle/cup/flask/container/utensil = "unsupported".
+- If the object is clearly a gadget, garment, footwear, bag, accessory, piece of stationery, household item, or empty container — even if it has a brand name or barcode — set item_type = "unsupported".
+- When genuinely unsure whether the thing is eaten/drunk/applied/taken, prefer "unsupported". For unsupported items, set expiry_date, freshness and most fields to null.
 
 Rules:
 - Read EVERYTHING printed. Works for food, medicines, cosmetics/makeup/creams/powders, and packaged goods.

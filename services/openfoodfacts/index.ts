@@ -23,6 +23,11 @@ type OffProduct = {
   image_url?: string;
 };
 
+/** Only consumables have a shelf life; everything else is rejected at scan time. */
+export function isConsumable(c: Category | null): boolean {
+  return c === "food" || c === "cosmetics" || c === "medicine";
+}
+
 /** Refine the source's default category using OFF category tags where we can. */
 function refineCategory(fallback: Category, tags: string[] = []): Category {
   const t = tags.join(" ");
@@ -34,14 +39,17 @@ function refineCategory(fallback: Category, tags: string[] = []): Category {
 function toResult(barcode: string, category: Category, p: OffProduct): ProductLookup | null {
   const name = (p.product_name_en || p.product_name || "").trim();
   if (!name) return null;
+  const resolved = refineCategory(category, p.categories_tags);
   return {
     found: true,
     barcode,
     name,
     brand: (p.brands || "").split(",")[0]?.trim() || null,
     size: (p.quantity || "").trim() || null,
-    category: refineCategory(category, p.categories_tags),
+    category: resolved,
     image_url: p.image_front_url || p.image_url || null,
+    // The general products DB ("other") isn't a consumable unless tags say otherwise.
+    supported: isConsumable(resolved),
   };
 }
 
@@ -91,15 +99,17 @@ async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
     const name = (it?.title || "").trim();
     if (!name) return null;
     const catStr = it?.category || "";
+    const category = mapUpcCategory(catStr);
     return {
       found: true,
       barcode,
       name,
       brand: it?.brand?.trim() || null,
       size: null,
-      category: mapUpcCategory(catStr),
+      category,
       image_url: it?.images?.[0] || null,
-      supported: !UNSUPPORTED_RE.test(catStr), // electronics/books/etc. → rejected
+      // Only food/cosmetics/medicine are trackable; electronics/clothes/"other" → rejected.
+      supported: isConsumable(category) && !UNSUPPORTED_RE.test(catStr),
     };
   } catch {
     return null;

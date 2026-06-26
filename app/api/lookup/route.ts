@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { lookupBarcode } from "@/services/openfoodfacts";
+import { lookupBarcode, isConsumable } from "@/services/openfoodfacts";
 import { createAdminClient } from "@/services/supabase/admin";
+import type { Category } from "@/types/database";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,8 @@ export async function GET(request: Request) {
         size: cached.size ?? null,
         category: cached.category ?? null,
         image_url: cached.image_url ?? null,
+        // Gate cached hits too — a non-consumable must still be rejected.
+        supported: isConsumable((cached.category as Category | null) ?? null),
         fromCatalog: true,
       });
     }
@@ -53,7 +56,8 @@ export async function GET(request: Request) {
     const product = await lookupBarcode(barcode);
 
     // ── 3. Cache on hit (fire-and-forget — don't block the response) ──────────
-    if (product.found && product.name) {
+    //     Skip non-consumables so they never get served as a catalog hit later.
+    if (product.found && product.name && product.supported !== false) {
       void admin
         .from("barcode_catalog")
         .upsert(
