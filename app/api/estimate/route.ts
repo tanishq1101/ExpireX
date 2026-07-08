@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { geminiEstimateShelfLife } from "@/services/gemini";
 import { estimateShelfLifeLocal } from "@/lib/shelf-life";
 import { categorySchema } from "@/lib/validators";
+import { rateLimit } from "@/lib/rate-limit";
 import { todayKolkata } from "@/lib/dates";
 
 export const runtime = "nodejs";
@@ -12,6 +13,8 @@ export const maxDuration = 30;
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!rateLimit(`estimate:${userId}`, 30, 60_000))
+    return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
 
   let body: { name?: unknown; category?: unknown; base_date?: unknown };
   try {

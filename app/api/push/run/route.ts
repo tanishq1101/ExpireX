@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import webpush from "web-push";
+import { timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/services/supabase/admin";
 import { todayKolkata, addDays } from "@/lib/dates";
 import { REMINDER_OFFSETS } from "@/lib/status";
@@ -9,11 +10,19 @@ export const maxDuration = 60;
 
 // Triggered daily by Vercel Cron (which sends `Authorization: Bearer <CRON_SECRET>`).
 // Sends a web push for every item hitting a reminder offset, to that user's devices.
+function safeEqual(a: string, b: string) {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  // timingSafeEqual throws on length mismatch, so pad both sides to the same length first.
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+}
+
 function authorized(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
-  const header = request.headers.get("authorization");
-  return header === `Bearer ${secret}` || request.headers.get("x-cron-secret") === secret;
+  const header = request.headers.get("authorization") ?? "";
+  const altHeader = request.headers.get("x-cron-secret") ?? "";
+  return safeEqual(header, `Bearer ${secret}`) || safeEqual(altHeader, secret);
 }
 
 type DueItem = { id: string; name: string; user_id: string; effective_expiry: string };

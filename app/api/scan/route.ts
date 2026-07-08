@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { geminiExtractFromImage, geminiExtract, geminiEstimateShelfLife } from "@/services/gemini";
 import { tesseractExtractText, parseOcrText } from "@/services/tesseract";
 import { estimateShelfLifeLocal } from "@/lib/shelf-life";
+import { rateLimit } from "@/lib/rate-limit";
 import { todayKolkata } from "@/lib/dates";
 import type { Extraction } from "@/lib/validators";
 import type { Category } from "@/types/database";
@@ -20,6 +21,8 @@ export async function POST(request: Request) {
   // Require an authenticated user — don't burn AI quota for anonymous callers.
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!rateLimit(`scan:${userId}`, 20, 60_000))
+    return NextResponse.json({ error: "Too many scans — please slow down." }, { status: 429 });
 
   let file: File | null = null;
   try {

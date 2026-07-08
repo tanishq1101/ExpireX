@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { lookupBarcode, isConsumable } from "@/services/openfoodfacts";
 import { createAdminClient } from "@/services/supabase/admin";
+import { rateLimit } from "@/lib/rate-limit";
 import type { Category } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -21,6 +22,8 @@ type CatalogRow = {
 export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!rateLimit(`lookup:${userId}`, 30, 60_000))
+    return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
 
   const barcode = new URL(request.url).searchParams.get("barcode")?.trim();
   if (!barcode || !/^\d{6,14}$/.test(barcode)) {
