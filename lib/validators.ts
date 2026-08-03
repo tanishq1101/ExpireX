@@ -39,6 +39,8 @@ export const itemFormSchema = z
 export type ItemFormValues = z.infer<typeof itemFormSchema>;
 
 // Shape Gemini must return. Used to validate model output server-side before trusting it.
+// Nullable optionals match the model prompt (boolean | null, etc.) so one freelanced
+// field cannot wipe an otherwise-good extraction.
 export const extractionSchema = z.object({
   product_name: z.string().nullable(),
   brand: z.string().nullable().optional(),
@@ -48,7 +50,8 @@ export const extractionSchema = z.object({
   quantity: z.number().nonnegative().nullable().optional(),
   unit: z.string().max(40).nullable().optional(),
   // true when expiry_date was AI-estimated (no printed date found), so the UI can flag it.
-  estimated: z.boolean().optional(),
+  // null is allowed — the model prompt returns boolean | null.
+  estimated: z.boolean().nullable().optional(),
   // Eligibility: only food/cosmetics/medicine are trackable; everything else is rejected.
   item_type: z.enum(["food", "cosmetics", "medicine", "unsupported"]).nullable().optional(),
   detected: z.string().max(60).nullable().optional(),
@@ -59,6 +62,11 @@ export const extractionSchema = z.object({
 });
 
 export type Extraction = z.infer<typeof extractionSchema>;
+
+/** Empty extraction used when the model returns unparseable output. */
+export function emptyExtraction(): Extraction {
+  return { product_name: null, expiry_date: null, category: null };
+}
 
 // One line item parsed from a receipt photo. Receipts rarely print expiry dates, so the
 // model estimates a likely expiry from the purchase date + typical shelf life.
@@ -75,6 +83,7 @@ export const receiptSchema = z.object({
 });
 
 // Shape Gemini must return for an AI shelf-life estimate (used when no printed date is read).
+// tips: preprocess slices to 3 — models often return 4 and used to fail the whole estimate.
 export const shelfLifeSchema = z.object({
   // estimated expiry as ISO date, or null if the model can't reason about it
   expiry_date: dateString.nullable(),
@@ -83,10 +92,23 @@ export const shelfLifeSchema = z.object({
   // one short human sentence explaining the basis (e.g. "Milk keeps ~7 days refrigerated")
   basis: z.string().max(160).nullable(),
   // up to 3 short, practical usage/storage tips for the scanner analysis card
-  tips: z.array(z.string().max(120)).max(3).nullable().optional(),
+  tips: z.preprocess((v) => {
+    if (v == null) return v;
+    if (!Array.isArray(v)) return null;
+    return v
+      .filter((t): t is string => typeof t === "string")
+      .map((t) => t.trim().slice(0, 120))
+      .filter(Boolean)
+      .slice(0, 3);
+  }, z.array(z.string().max(120)).max(3).nullable().optional()),
 });
 
 export type ShelfLife = z.infer<typeof shelfLifeSchema>;
+
+/** Empty shelf-life estimate when the model returns unparseable output. */
+export function emptyShelfLife(): ShelfLife {
+  return { expiry_date: null, confidence: null, basis: null };
+}
 
 // Product identity resolved from a barcode (Open Food Facts). Dates never come from here.
 export type ProductLookup = {
