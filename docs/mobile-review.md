@@ -5,6 +5,7 @@
 - Label scans preserve readable printed dates, including dates already in the past. Missing dates stay blank for the user to enter; the scanner no longer automatically substitutes a shelf-life guess or photo freshness verdict.
 - Local OCR distinguishes expiry labels from manufacture labels, rejects impossible calendar dates, and handles ISO, Indian day/month/year, named-month, and month/year dates. Month/year uses the last day of that month. Unlabelled dates are not assumed to be expiry dates.
 - Receipt review validates every row before saving one batch, displays row errors, and never silently skips invalid products.
+- Tesseract English language data is bundled and explicitly included in the server function trace, removing the runtime CDN dependency. No language-cache writes are needed.
 - Label and receipt scanning share camera/upload controls. Camera streams acquired after navigation are stopped, preview URLs are released, the same photo can be selected again, and oversized uploads are rejected before a request.
 - Common form controls have larger touch targets and mobile inputs use 16px text to avoid iPhone focus zoom. Scanner copy uses plain language.
 - Shopping-list delete/clear operations keep items visible until the database confirms success; failed requests no longer make products appear deleted. Filtered inventory results distinguish “No matching items” from an empty inventory.
@@ -13,8 +14,9 @@
 ## Verified in the cloud
 
 - `npm test`: regression coverage for calendar parsing, complete receipt validation, and the real scan route with mocked authentication/recognition adapters. External image recognition accuracy is not established by these tests.
+- `npm run test:ocr`: the real Tesseract worker read two generated label images using bundled language data. A printed expiry was recognized correctly; a manufacture-only label produced no expiry. This is a controlled fixture check, not a real camera accuracy study.
 - `npm run lint`, `npx tsc --noEmit --incremental false`, and `npm run build`.
-- The public production landing page responds successfully via verified HTTPS. Additional route checks are recorded in the task report.
+- Production `/`, `/faq`, `/privacy`, `/terms`, `/contact`, `/login`, and `/sign-up` returned 200. `/dashboard`, `/items`, `/items/new`, and `/shopping` returned 307 when signed out. Scan, receipt, estimate, catalog-confirm, and push-subscribe POSTs returned 401 when signed out. Updated FAQ copy was observed after pushing the initial fix commit.
 
 ## Still requires direct testing
 

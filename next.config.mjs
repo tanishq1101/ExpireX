@@ -1,7 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Tesseract is a Node-only WASM package; keep it out of the bundle trace.
-  serverExternalPackages: ["tesseract.js"],
+  serverExternalPackages: ["tesseract.js", "@tesseract.js-data/eng"],
+  outputFileTracingIncludes: {
+    "/api/scan": [
+      "./node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz",
+      "./node_modules/tesseract.js/src/**/*",
+      "./node_modules/tesseract.js-core/**/*",
+    ],
+  },
   images: {
     remotePatterns: [{ protocol: "https", hostname: "*.supabase.co" }],
   },
