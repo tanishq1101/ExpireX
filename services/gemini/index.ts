@@ -1,4 +1,5 @@
 import "server-only";
+import { isCalendarDate } from "@/lib/calendar-date";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   extractionSchema,
@@ -46,7 +47,7 @@ Rules:
 - Prefer "best before"/"exp"/"use by"/"use before" for expiry; "mfg"/"mfd"/"pkd"/"packed on" for manufacture.
 - Medicines: read the "EXP" date; set category to "medicine".
 - Cosmetics/makeup/skincare: set category to "cosmetics". If only a Period-After-Opening symbol ("12M", "24M") is shown and there is no printed expiry, leave expiry_date null.
-- FRESH UNPACKAGED PERISHABLES (raw chicken/goat/meat/fish, eggs, loose fruit & vegetables) usually have NO printed date. For these: set category "food"; visually judge "freshness" + a short "freshness_note"; ESTIMATE "expiry_date" as today + the typical safe refrigerated life ADJUSTED for what you see — spoiled → today or +1 day; use_soon → a few days; fresh → the full typical life (e.g. eggs ~3 weeks, leafy greens ~5 days, raw chicken ~2 days, root vegetables ~2 weeks); set "estimated": true. If countable (e.g. eggs), estimate "quantity".
+- For fresh unpackaged items without a printed date, leave expiry_date, freshness and freshness_note null. A photo cannot establish a safe expiry. Do not estimate dates during label extraction.
 - For PACKAGED goods (sealed carton, bottle, can, blister, jar) with or without a printed date: set "freshness" and "freshness_note" to null. Never invent a visual freshness verdict for sealed packaging.
 - If a value is unreadable or absent, use null. Never invent a value.`;
 
@@ -111,7 +112,7 @@ function asIsoDate(v: unknown): string | null | undefined {
   const t = v.trim();
   if (!t) return null;
   // Accept only ISO here; Indian DD/MM is the model's job to convert.
-  return ISO_DATE.test(t) && !Number.isNaN(Date.parse(`${t}T00:00:00Z`)) ? t : null;
+  return ISO_DATE.test(t) && isCalendarDate(t) ? t : null;
 }
 
 function asBool(v: unknown): boolean | null | undefined {

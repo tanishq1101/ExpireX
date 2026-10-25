@@ -9,7 +9,8 @@
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "types": "supabase gen types typescript --linked > types/database.ts"
+    "types": "supabase gen types typescript --linked > types/database.ts",
+    "test": "node --require ./tests/register.cjs --test tests/*.test.cjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.2",

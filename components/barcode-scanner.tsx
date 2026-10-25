@@ -134,13 +134,15 @@ export function BarcodeScanner({
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
       if (cancelled) return;
       const reader = new BrowserMultiFormatReader();
-      zxingControlsRef.current = await reader.decodeFromVideoDevice(
+      const controls = await reader.decodeFromVideoDevice(
         undefined,
         videoRef.current!,
         (result) => {
           if (result) consider(result.getText());
         }
       );
+      if (cancelled) controls.stop();
+      else zxingControlsRef.current = controls;
     }
 
     async function start() {
@@ -216,7 +218,7 @@ export function BarcodeScanner({
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/90">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 animate-pulse-ring rounded-full bg-accent" />
-              AI System Active
+              Looking for barcode
             </span>
             <span className="text-white/70">Expire X</span>
           </div>

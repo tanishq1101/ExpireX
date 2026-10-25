@@ -1,115 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Camera, ImageUp, Loader2, ScanLine, X, RotateCcw, SwitchCamera } from "lucide-react";
+import { Loader2, ScanLine } from "lucide-react";
 import type { Extraction } from "@/lib/validators";
 import { fetchJson } from "@/lib/fetch-json";
 import { ScanRejected } from "@/components/scan-rejected";
+import { ImageCapture } from "@/components/image-capture";
 import { Button } from "@/components/ui/button";
 
-type Facing = "environment" | "user";
-
-export function ScanUploader({
-  onExtracted,
-}: {
+export function ScanUploader({ onExtracted }: {
   onExtracted: (extraction: Extraction, file: File) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [cameraOn, setCameraOn] = useState(false);
-  const [starting, setStarting] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [facing, setFacing] = useState<Facing>("environment");
   const [rejected, setRejected] = useState<{ detected: string | null } | null>(null);
-
-  // Release the camera when we leave the component or stop using it.
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setCameraOn(false);
-  }
-  useEffect(() => () => stopCamera(), []);
-
-  async function startCamera(facingMode: Facing = facing) {
-    // getUserMedia needs a secure context (https or localhost).
-    if (!navigator.mediaDevices?.getUserMedia) {
-      toast.error("Camera needs a secure (https) connection. Upload a photo instead.");
-      return;
-    }
-    setStarting(true);
-    try {
-      // Stop any existing stream first (used when flipping cameras).
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode } }, // rear cam on phones, webcam on laptops
-        audio: false,
-      });
-      streamRef.current = stream;
-      setCameraOn(true);
-      // Wait a tick for the <video> to mount, then attach the stream.
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-        }
-      });
-    } catch (err) {
-      const name = err instanceof DOMException ? err.name : "";
-      if (name === "NotAllowedError")
-        toast.error("Camera blocked. Allow camera access in your browser’s site settings.");
-      else if (name === "NotFoundError") toast.error("No camera found. Upload a photo instead.");
-      else toast.error("Couldn’t start the camera. Upload a photo instead.");
-    } finally {
-      setStarting(false);
-    }
-  }
-
-  function flipCamera() {
-    const next: Facing = facing === "environment" ? "user" : "environment";
-    setFacing(next);
-    startCamera(next);
-  }
-
-  function capture() {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0);
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const captured = new File([blob], `scan-${Date.now()}.jpg`, { type: "image/jpeg" });
-        setFile(captured);
-        setPreview(URL.createObjectURL(captured));
-        stopCamera();
-      },
-      "image/jpeg",
-      0.9
-    );
-  }
-
-  function pickFile(f: File | null) {
-    if (!f) return;
-    if (!f.type.startsWith("image/")) {
-      toast.error("Please choose an image.");
-      return;
-    }
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
-  }
-
-  function reset() {
-    setFile(null);
-    setPreview(null);
-    setRejected(null);
-  }
 
   async function scan() {
     if (!file) return;
@@ -135,7 +40,7 @@ export function ScanUploader({
         return;
       }
       if (!json.extraction) throw new Error("Couldn’t read the image.");
-      toast.success(`Scanned with ${json.source === "gemini" ? "AI vision" : "Tesseract OCR"}`);
+      toast.success("Photo read — check the details before saving");
       onExtracted(json.extraction, file);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Scan failed.");
@@ -145,97 +50,27 @@ export function ScanUploader({
   }
 
   if (rejected) {
-    return <ScanRejected detected={rejected.detected} onRetry={reset} />;
+    return <ScanRejected detected={rejected.detected} onRetry={() => {
+      setRejected(null);
+      setFile(null);
+    }} />;
   }
 
   return (
-    <div className="space-y-4">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+    <div className="space-y-4" aria-busy={scanning}>
+      <ImageCapture
+        onPick={setFile}
+        onClear={() => setFile(null)}
+        disabled={scanning}
+        hint="Take a clear close-up of the product name and printed expiry date. You’ll check the details before saving."
       />
-
-      {/* Live camera */}
-      {cameraOn && (
-        <div className="space-y-3">
-          <div className="relative overflow-hidden rounded-xl border border-border bg-black">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video ref={videoRef} playsInline muted className="mx-auto max-h-72 w-full object-contain" />
-            <button
-              type="button"
-              onClick={flipCamera}
-              aria-label="Flip camera"
-              className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70"
-            >
-              <SwitchCamera className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={stopCamera}>
-              <X className="h-4 w-4" /> Cancel
-            </Button>
-            <Button className="flex-1" onClick={capture}>
-              <Camera className="h-4 w-4" /> Capture
-            </Button>
-          </div>
-        </div>
+      {file && (
+        <Button className="w-full" onClick={scan} disabled={scanning}>
+          {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+          {scanning ? "Reading photo…" : "Read label"}
+        </Button>
       )}
-
-      {/* Preview of a captured/uploaded image */}
-      {!cameraOn && preview && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={preview}
-          alt="Selected product"
-          className="mx-auto max-h-72 rounded-xl border border-border object-contain"
-        />
-      )}
-
-      {/* Idle: choose camera or upload */}
-      {!cameraOn && !preview && (
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => startCamera()}
-            disabled={starting}
-            className="glass flex flex-col items-center gap-2 p-8 text-muted transition hover:border-primary/40 disabled:opacity-60"
-          >
-            {starting ? <Loader2 className="h-7 w-7 animate-spin" /> : <Camera className="h-7 w-7" />}
-            <span className="text-sm">Use camera</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="glass flex flex-col items-center gap-2 p-8 text-muted transition hover:border-primary/40"
-          >
-            <ImageUp className="h-7 w-7" />
-            <span className="text-sm">Upload photo</span>
-          </button>
-        </div>
-      )}
-
-      {/* Actions for a captured/uploaded image */}
-      {!cameraOn && preview && (
-        <div className="flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={reset} disabled={scanning}>
-            <RotateCcw className="h-4 w-4" /> Retake
-          </Button>
-          <Button className="flex-1" onClick={scan} disabled={scanning}>
-            {scanning ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Scanning…
-              </>
-            ) : (
-              <>
-                <ScanLine className="h-4 w-4" /> Scan
-              </>
-            )}
-          </Button>
-        </div>
-      )}
+      {scanning && <p role="status" className="text-center text-sm text-muted">This may take a little while. Keep this screen open.</p>}
     </div>
   );
 }

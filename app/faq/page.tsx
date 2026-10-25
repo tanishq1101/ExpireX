@@ -14,7 +14,7 @@ const FAQS = [
   },
   {
     q: "How does the scanning work?",
-    a: "Point your camera at a product label and Expire X uses on-device OCR plus AI to read the name, expiry date and likely category. It pre-fills the form so you only confirm — no manual typing of dates.",
+    a: "Take a clear photo of the product label. We read the name and printed expiry date, then ask you to check them before saving. If the date is unclear, you can enter it yourself.",
   },
   {
     q: "When will I be reminded?",

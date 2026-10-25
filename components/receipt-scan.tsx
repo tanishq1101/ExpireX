@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { Loader2, ReceiptText, Trash2, Save } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
-import { itemFormSchema, type ReceiptItem } from "@/lib/validators";
+import type { ReceiptItem } from "@/lib/validators";
+import { prepareReceiptRows, type ReceiptRow as Row } from "@/lib/receipt-review";
 import { fetchJson } from "@/lib/fetch-json";
 import { CATEGORIES } from "@/lib/status";
 import { CATEGORY_META } from "@/lib/categories";
@@ -15,8 +16,6 @@ import { ImageCapture } from "@/components/image-capture";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-
-type Row = { name: string; category: Category; expiry: string; qty: string };
 
 function toRows(items: ReceiptItem[]): Row[] {
   return items.map((it) => ({
@@ -36,6 +35,7 @@ export function ReceiptScan() {
   const [processing, setProcessing] = useState(false);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
 
   async function process() {
     if (!file) return;
@@ -62,35 +62,31 @@ export function ReceiptScan() {
   }
 
   function update(i: number, patch: Partial<Row>) {
+    setRowErrors({});
     setRows((prev) => prev && prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
   function remove(i: number) {
+    setRowErrors({});
     setRows((prev) => prev && prev.filter((_, idx) => idx !== i));
   }
 
   async function saveAll() {
-    if (!rows || !userId) return;
+    if (!rows) return;
+    if (!userId) {
+      toast.error("Your session ended. Sign in again to save your items.");
+      return;
+    }
     setSaving(true);
     try {
-      const valid: Record<string, unknown>[] = [];
-      let skipped = 0;
-      for (const r of rows) {
-        const parsed = itemFormSchema.safeParse({
-          name: r.name,
-          category: r.category,
-          expiry_date: r.expiry,
-          quantity: r.qty,
-        });
-        if (parsed.success) valid.push({ ...parsed.data, user_id: userId });
-        else skipped++;
-      }
-      if (valid.length === 0) {
-        toast.error("Add an expiry date to at least one row before saving.");
+      const { valid, errors } = prepareReceiptRows(rows, userId);
+      setRowErrors(errors);
+      if (Object.keys(errors).length > 0 || valid.length === 0) {
+        toast.error("Check the highlighted items. Nothing has been saved yet.");
         return;
       }
       const { error } = await supabase.from("items").insert(valid);
       if (error) throw error;
-      toast.success(`Saved ${valid.length} item${valid.length > 1 ? "s" : ""}${skipped ? `, skipped ${skipped} (missing date)` : ""}`);
+      toast.success(`Saved ${valid.length} item${valid.length > 1 ? "s" : ""}`);
       router.push("/items");
       router.refresh();
     } catch (err) {
@@ -109,15 +105,17 @@ export function ReceiptScan() {
           Review {rows.length} item{rows.length > 1 ? "s" : ""}
         </div>
         <p className="text-xs text-muted">
-          Dates are AI estimates from typical shelf life — adjust any that look off. Rows without a
-          date are skipped on save.
+          Check every name and printed expiry date before saving. Suggested dates are estimates,
+          not dates read from the pack. Remove any items you don’t want to save.
         </p>
 
         <div className="space-y-3">
           {rows.map((r, i) => (
-            <div key={i} className="glass space-y-2 p-3">
+            <div key={i} className="glass space-y-2 p-3" role="group" aria-label={`Item ${i + 1}`} aria-describedby={rowErrors[i] ? `receipt-error-${i}` : undefined}>
               <div className="flex items-center gap-2">
                 <Input
+                  aria-label={`Item ${i + 1} name`}
+                  disabled={saving}
                   value={r.name}
                   onChange={(e) => update(i, { name: e.target.value })}
                   placeholder="Item name"
@@ -126,14 +124,16 @@ export function ReceiptScan() {
                 <button
                   type="button"
                   onClick={() => remove(i)}
+                  disabled={saving}
                   aria-label="Remove row"
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-muted transition hover:text-danger"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border text-muted transition hover:text-danger"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <Select
+                  disabled={saving}
                   value={r.category}
                   onChange={(e) => update(i, { category: e.target.value as Category })}
                   aria-label="Category"
@@ -145,12 +145,14 @@ export function ReceiptScan() {
                   ))}
                 </Select>
                 <Input
+                  disabled={saving}
                   type="date"
                   value={r.expiry}
                   onChange={(e) => update(i, { expiry: e.target.value })}
                   aria-label="Expiry date"
                 />
                 <Input
+                  disabled={saving}
                   type="number"
                   min="0"
                   step="any"
@@ -161,6 +163,7 @@ export function ReceiptScan() {
                   className="col-span-2 sm:col-span-1"
                 />
               </div>
+              {rowErrors[i] && <p id={`receipt-error-${i}`} role="alert" className="text-sm text-danger">{rowErrors[i]}</p>}
             </div>
           ))}
         </div>
@@ -169,7 +172,7 @@ export function ReceiptScan() {
           <Button variant="ghost" className="flex-1" onClick={() => setRows(null)} disabled={saving}>
             Scan again
           </Button>
-          <Button className="flex-1" onClick={saveAll} disabled={saving}>
+          <Button className="flex-1" onClick={saveAll} disabled={saving || rows.length === 0}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save all
           </Button>
@@ -182,6 +185,7 @@ export function ReceiptScan() {
   return (
     <div className="space-y-4">
       <ImageCapture
+        disabled={processing}
         onPick={setFile}
         onClear={() => setFile(null)}
         hint="Snap or upload a shopping receipt — we’ll list every product and estimate expiries."

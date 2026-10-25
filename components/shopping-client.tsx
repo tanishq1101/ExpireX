@@ -96,20 +96,34 @@ export function ShoppingClient({
   }
 
   async function remove(row: ShoppingItem) {
-    setList((prev) => prev.filter((r) => r.id !== row.id));
-    const { error } = await supabase.from("shopping_list").delete().eq("id", row.id);
-    if (error) toast.error("Couldn't remove.");
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.from("shopping_list").delete().eq("id", row.id);
+      if (error) throw error;
+      setList((prev) => prev.filter((r) => r.id !== row.id));
+    } catch {
+      toast.error("Couldn’t remove this item. It’s still in your list — try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function clearChecked() {
+    if (busy) return;
     const checkedIds = list.filter((r) => r.checked).map((r) => r.id);
     if (checkedIds.length === 0) return;
     setBusy(true);
-    setList((prev) => prev.filter((r) => !r.checked));
-    const { error } = await supabase.from("shopping_list").delete().in("id", checkedIds);
-    if (error) toast.error("Couldn't clear checked items.");
-    else toast.success(`Cleared ${checkedIds.length} item${checkedIds.length > 1 ? "s" : ""}`);
-    setBusy(false);
+    try {
+      const { error } = await supabase.from("shopping_list").delete().in("id", checkedIds);
+      if (error) throw error;
+      setList((prev) => prev.filter((r) => !checkedIds.includes(r.id)));
+      toast.success(`Cleared ${checkedIds.length} item${checkedIds.length > 1 ? "s" : ""}`);
+    } catch {
+      toast.error("Couldn’t clear these items. Your list hasn’t changed — try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const checkedCount = list.filter((r) => r.checked).length;
@@ -144,7 +158,7 @@ export function ShoppingClient({
                     {relativeLabel(today, s.expiry_date)}
                   </p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => acceptSuggestion(s)}>
+                <Button size="sm" variant="outline" onClick={() => acceptSuggestion(s)} disabled={busy}>
                   <Plus className="h-3.5 w-3.5" /> Add
                 </Button>
               </div>
@@ -185,6 +199,7 @@ export function ShoppingClient({
               >
                 <button
                   onClick={() => toggle(row)}
+                  disabled={busy}
                   aria-label={row.checked ? "Mark as not bought" : "Mark as bought"}
                   className={cn(
                     "grid h-6 w-6 shrink-0 place-items-center rounded-md border transition",
@@ -208,6 +223,7 @@ export function ShoppingClient({
                 </div>
                 <button
                   onClick={() => remove(row)}
+                  disabled={busy}
                   aria-label="Remove"
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition hover:text-danger"
                 >

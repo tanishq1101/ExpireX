@@ -15,6 +15,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Search
   const { q, category, status, location } = await searchParams;
   const supabase = await createClient();
   const today = todayKolkata();
+  const filtered = !!(q || categoryGuard(category) || status || location);
 
   let query = supabase.from("items").select("*").order("effective_expiry", { ascending: true });
 
@@ -56,10 +57,10 @@ export default async function ItemsPage({ searchParams }: { searchParams: Search
       ) : items.length === 0 ? (
         <EmptyState
           icon={PackageOpen}
-          title="No items yet"
-          description="Add your first item — scan a label or enter it manually."
-          actionLabel="Add item"
-          actionHref="/items/new"
+          title={filtered ? "No matching items" : "No items yet"}
+          description={filtered ? "Try another search or clear the filters to see your items." : "Add your first item — scan a label or enter it manually."}
+          actionLabel={filtered ? "Clear filters" : "Add item"}
+          actionHref={filtered ? "/items" : "/items/new"}
         />
       ) : (
         <ul className="space-y-2">

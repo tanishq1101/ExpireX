@@ -25,7 +25,7 @@ const STATS = [
   { value: "7", label: "Categories tracked" },
   { value: "5", label: "Reminder windows" },
   { value: "<1 min", label: "To add an item" },
-  { value: "100%", label: "Private by RLS" },
+  { value: "Your data", label: "Private to your account" },
 ];
 
 const FEATURES = [
@@ -37,7 +37,7 @@ const FEATURES = [
   {
     icon: ScanLine,
     title: "Scan, don’t type",
-    body: "Snap a label — OCR + AI pre-fill the name, expiry date and category. You just confirm.",
+    body: "Take a label photo to fill in the details. Check the printed expiry date before saving.",
   },
   {
     icon: BellRing,
@@ -79,7 +79,7 @@ const FAQS = [
   },
   {
     q: "How does the scanning work?",
-    a: "Point your camera at a product label and Expire X uses on-device OCR plus AI to read the name, expiry date and likely category. It pre-fills the form so you only confirm — no manual typing of dates.",
+    a: "Take a clear photo of the product label. We read the name and printed expiry date, then ask you to check them before saving. If the date is unclear, you can enter it yourself.",
   },
   {
     q: "When will I be reminded?",
@@ -106,7 +106,7 @@ export function Landing() {
           <div className="animate-fade-up text-center lg:text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
               <Sparkles className="h-3.5 w-3.5" />
-              Barcode + OCR + AI expiry tracking
+              Simple expiry reminders
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">

@@ -41,6 +41,8 @@ export function initialFromExtraction(
       }. No printed date, so the expiry is an AI estimate — a visual guide, not a safety guarantee. When in doubt, throw it out.`
     : ex.estimated
     ? "The expiry was AI-estimated (no printed date found) — please confirm or adjust it."
+    : !ex.expiry_date
+    ? "We couldn’t read an expiry date. Check the printed date on the pack and enter it below."
     : undefined;
 
   return { initial, notice };

@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { geminiExtractFromImage, geminiExtract, geminiEstimateShelfLife } from "@/services/gemini";
+import { geminiExtractFromImage, geminiExtract } from "@/services/gemini";
 import { tesseractExtractText, parseOcrText } from "@/services/tesseract";
-import { estimateShelfLifeLocal } from "@/lib/shelf-life";
 import { rateLimit } from "@/lib/rate-limit";
 import { todayKolkata } from "@/lib/dates";
 import type { Extraction } from "@/lib/validators";
-import type { Category } from "@/types/database";
 
 function hasUseful(ex: Extraction): boolean {
   return !!(ex.product_name || ex.expiry_date);
@@ -46,25 +44,6 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const today = todayKolkata();
 
-  // If OCR read no expiry date, auto-estimate one so the form is never blank.
-  async function withEstimatedExpiry(extraction: Extraction): Promise<Extraction> {
-    if (extraction.expiry_date || !extraction.product_name) return extraction;
-    const category = (extraction.category as Category) ?? "other";
-    const base = extraction.manufacture_date ?? today;
-    try {
-      const ai = await geminiEstimateShelfLife(extraction.product_name, category, base);
-      if (ai.expiry_date && ai.expiry_date > today) {
-        return { ...extraction, expiry_date: ai.expiry_date, estimated: true };
-      }
-    } catch {
-      /* fall through to local */
-    }
-    const local = estimateShelfLifeLocal(extraction.product_name, category, base);
-    return local.expiry_date
-      ? { ...extraction, expiry_date: local.expiry_date, estimated: true }
-      : extraction;
-  }
-
   // Only consumables (food/cosmetics/medicine) have an expiry. AI vision ALWAYS returns an
   // item_type, so for a photo scan we ALLOW only those three and reject everything else —
   // including blank/uncertain results (a laptop or phone often comes back unsure rather than
@@ -80,7 +59,20 @@ export async function POST(request: Request) {
         detected: raw.detected ?? raw.product_name ?? null,
       });
     }
-    const extraction = await withEstimatedExpiry(raw);
+    if (!hasUseful(raw)) {
+      return NextResponse.json(
+        { error: "No product details were readable. Take a close-up of the printed name and expiry date, or enter them manually." },
+        { status: 422 }
+      );
+    }
+    // A scan must not silently replace an unreadable printed date with a guess.
+    const extraction = {
+      ...raw,
+      expiry_date: raw.estimated ? null : raw.expiry_date,
+      estimated: false,
+      freshness: null,
+      freshness_note: null,
+    };
     return NextResponse.json({ extraction, source });
   }
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isCalendarDate } from "./calendar-date";
 import { CATEGORIES } from "./status";
 
 export const categorySchema = z.enum(CATEGORIES);
@@ -6,7 +7,7 @@ export const categorySchema = z.enum(CATEGORIES);
 const dateString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
-  .refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)), "Invalid date");
+  .refine(isCalendarDate, "Enter a valid calendar date");
 
 // Form payload (what the Add/Edit + confirm-before-save form validates).
 export const itemFormSchema = z
