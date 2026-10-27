@@ -6,7 +6,7 @@ import type { ShelfLife } from "./validators";
 // unavailable. Deliberately middle-of-the-road; the user always confirms before saving.
 const DEFAULT_DAYS: Record<Category, number | null> = {
   food: 30, // generic packaged food; fresh items overridden by keywords/AI/OCR
-  medicine: 730, // ~2 years sealed
+  medicine: null, // The printed expiry is required; never infer medicine expiry.
   cosmetics: 730, // ~2 years unopened
   documents: null, // no meaningful shelf life
   warranty: 365,
@@ -53,6 +53,9 @@ export function estimateShelfLifeLocal(
   category: Category,
   baseDate: string
 ): ShelfLife {
+  if (category === "medicine" || category === "documents") {
+    return { expiry_date: null, confidence: null, basis: null };
+  }
   const kw = KEYWORD_DAYS.find((k) => k.re.test(productName));
   const days = kw?.days ?? DEFAULT_DAYS[category];
   if (days == null) {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { geminiEstimateShelfLife } from "@/services/gemini";
 import { estimateShelfLifeLocal } from "@/lib/shelf-life";
-import { categorySchema } from "@/lib/validators";
+import { categorySchema, dateString } from "@/lib/validators";
 import { rateLimit } from "@/lib/rate-limit";
 import { todayKolkata } from "@/lib/dates";
 
@@ -19,20 +19,26 @@ export async function POST(request: Request) {
   let body: { name?: unknown; category?: unknown; base_date?: unknown };
   try {
     body = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid body");
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
-  if (!name) return NextResponse.json({ error: "Product name is required" }, { status: 400 });
+  if (!name || name.length > 200) return NextResponse.json({ error: "Product name must be 1–200 characters" }, { status: 400 });
 
   const cat = categorySchema.safeParse(body.category);
   const category = cat.success ? cat.data : "other";
+  if (category === "medicine" || category === "documents") {
+    return NextResponse.json({ expiry_date: null, confidence: null, basis: "Enter the date printed on the item.", source: "manual" });
+  }
 
   const today = todayKolkata();
   let baseDate = today;
-  if (typeof body.base_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.base_date)) {
-    baseDate = body.base_date;
+  if (body.base_date !== undefined) {
+    const base = dateString.safeParse(body.base_date);
+    if (!base.success) return NextResponse.json({ error: "Invalid base date" }, { status: 400 });
+    baseDate = base.data;
   }
 
   // Primary: Gemini reasons about the product. Fallback: local heuristic table.

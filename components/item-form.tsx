@@ -10,7 +10,7 @@ import { uploadItemImage } from "@/lib/storage";
 import { externalImageUrl } from "@/lib/utils";
 import { fetchJson } from "@/lib/fetch-json";
 import { addDays } from "@/lib/dates";
-import { itemFormSchema, type Extraction, type ShelfLife } from "@/lib/validators";
+import { categorySchema, dateString, itemFormSchema, type Extraction, type ShelfLife } from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
 import { CATEGORY_META } from "@/lib/categories";
 import type { Category, Item } from "@/types/database";
@@ -33,7 +33,7 @@ export type ItemFormInitial = Partial<
     | "unit"
     | "notes"
     | "barcode"
-
+    | "location"
     | "opened_date"
     | "open_within_days"
     | "image_url"
@@ -63,7 +63,10 @@ export function ItemForm({
   const [name, setName] = useState(initial.name ?? "");
   const [category, setCategory] = useState<Category>(() => {
     if (initial.category) return initial.category as Category;
-    try { return (localStorage.getItem("defaultCategory") as Category) ?? "food"; } catch { return "food"; }
+    try {
+      const saved = categorySchema.safeParse(localStorage.getItem("defaultCategory"));
+      return saved.success ? saved.data : "food";
+    } catch { return "food"; }
   });
   const [expiry, setExpiry] = useState(initial.expiry_date ?? "");
   const [mfg, setMfg] = useState(initial.manufacture_date ?? "");
@@ -71,6 +74,7 @@ export function ItemForm({
   const [unit, setUnit] = useState(initial.unit ?? "");
   const [notes, setNotes] = useState(initial.notes ?? "");
   const [barcode] = useState(initial.barcode ?? "");
+  const [location, setLocation] = useState(initial.location ?? "");
 
   const [openedDate, setOpenedDate] = useState(initial.opened_date ?? "");
   const [openWithin, setOpenWithin] = useState(
@@ -138,7 +142,7 @@ export function ItemForm({
       unit: unit || null,
       notes: notes || null,
       barcode: barcode || null,
-
+      location: location || null,
       opened_date: openedDate || null,
       open_within_days: openWithin || null,
     });
@@ -194,7 +198,7 @@ export function ItemForm({
   // Soonest of the printed expiry and the opened-window date (mirrors the DB generated column).
   const effectiveHint = (() => {
     const n = parseInt(openWithin, 10);
-    if (!openedDate || !Number.isFinite(n) || n <= 0) return null;
+    if (!dateString.safeParse(openedDate).success || !Number.isFinite(n) || n <= 0) return null;
     const eff = addDays(openedDate, n);
     return !expiry || eff < expiry ? eff : null;
   })();
@@ -274,7 +278,7 @@ export function ItemForm({
           variant="outline"
           size="sm"
           onClick={estimateExpiry}
-          disabled={estimating}
+          disabled={estimating || category === "medicine"}
         >
           {estimating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
           Estimate expiry with AI
@@ -284,6 +288,9 @@ export function ItemForm({
         </Button>
       </div>
       {estimateNote && <p className="text-xs text-muted">✨ {estimateNote}</p>}
+      {category === "medicine" && (
+        <p className="text-xs text-muted">For medicine, scan or enter the expiry printed on the packaging.</p>
+      )}
 
       {showScan && (
         <div className="rounded-xl border border-border p-3">
@@ -357,6 +364,11 @@ export function ItemForm({
         {effectiveHint && (
           <p className="text-xs text-accent">⏳ Effective use-by: {effectiveHint}</p>
         )}
+      </div>
+
+      <div>
+        <Label htmlFor="location">Storage location</Label>
+        <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={60} placeholder="Fridge, pantry, medicine cabinet…" />
       </div>
 
       <div>

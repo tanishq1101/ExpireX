@@ -136,6 +136,7 @@ export function ShoppingClient({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Add an item to buy…"
+          aria-label="Item to add to shopping list"
           className="flex-1"
         />
         <Button type="submit" disabled={busy || !name.trim()}>

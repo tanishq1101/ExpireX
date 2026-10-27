@@ -57,7 +57,7 @@ export function ContactForm() {
         />
       </div>
       <Button type="submit" className="w-full sm:w-auto">
-        <Send className="h-4 w-4" /> Send message
+        <Send className="h-4 w-4" /> Open email draft
       </Button>
       <p className="text-xs text-muted">
         This opens your email app addressed to{" "}

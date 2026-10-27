@@ -49,7 +49,9 @@ export default async function ShoppingPage() {
           Auto-suggested from items that expired or expire within {SUGGEST_WINDOW_DAYS} days — plus anything you add.
         </p>
       </div>
-      <ShoppingClient initialList={list} suggestions={suggestions} today={today} />
+      {listRes.error || itemsRes.error ? (
+        <p role="alert" className="glass p-5 text-sm text-danger">Couldn’t load your shopping list. Reload the page to try again.</p>
+      ) : <ShoppingClient initialList={list} suggestions={suggestions} today={today} />}
     </div>
   );
 }

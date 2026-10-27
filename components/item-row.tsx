@@ -35,7 +35,7 @@ export function ItemRow({ item, today }: { item: Item; today: string }) {
             {relativeLabel(today, item.effective_expiry)}
             {opened ? " · opened" : ""}
             {item.location ? ` · ${item.location}` : ""}
-            {item.quantity ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ""}` : ""}
+            {item.quantity != null ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ""}` : ""}
           </p>
         </div>
         <Badge className={cn("hidden sm:inline-flex", meta.tone)}>{meta.label}</Badge>

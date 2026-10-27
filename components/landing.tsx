@@ -79,7 +79,7 @@ const FAQS = [
   },
   {
     q: "How does the scanning work?",
-    a: "Take a clear photo of the product label. We read the name and printed expiry date, then ask you to check them before saving. If the date is unclear, you can enter it yourself.",
+    a: "Barcode decoding happens on your device. Label photos are processed on our server using OCR and Google Gemini. Review the details before saving. A barcode identifies a product, not its expiry; medicine needs the printed expiry date. Documents, warranties and subscriptions can be added manually.",
   },
   {
     q: "When will I be reminded?",
@@ -118,9 +118,8 @@ export function Landing() {
             </h1>
 
             <p className="mx-auto mt-5 max-w-xl text-balance text-base text-muted sm:text-lg lg:mx-0">
-              Expire X is your calm, green command centre for everything with a shelf life. Scan a
-              label, confirm the details once, and let timely reminders keep your food, medicine,
-              documents and subscriptions from ever catching you off guard.
+              Keep food, medicine, documents and subscriptions in one place. Scan a product label
+              or add an item manually, check the date, and get reminders before it expires.
             </p>
 
             <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:items-start">

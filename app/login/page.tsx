@@ -1,4 +1,5 @@
 import { SignIn } from "@clerk/nextjs";
+import Link from "next/link";
 
 export default function LoginPage() {
   return (
@@ -10,6 +11,7 @@ export default function LoginPage() {
         <p className="mt-1 text-sm text-muted">Welcome back.</p>
       </div>
       <SignIn routing="hash" signUpUrl="/sign-up" fallbackRedirectUrl="/dashboard" />
+      <Link href="/" className="text-sm text-muted hover:text-foreground">Back to Expire X</Link>
     </main>
   );
 }

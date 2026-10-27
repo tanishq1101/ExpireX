@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { ScanBarcode, Camera, ReceiptText, PencilLine, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Extraction } from "@/lib/validators";
 import { initialFromExtraction } from "@/lib/extraction";
-import { ItemForm, type ItemFormInitial } from "@/components/item-form";
-import { ScanUploader } from "@/components/scan-uploader";
-import { BarcodeAdd } from "@/components/barcode-add";
-import { ReceiptScan } from "@/components/receipt-scan";
+import type { ItemFormInitial } from "@/components/item-form";
+
+const loading = () => <p role="status" className="py-6 text-center text-sm text-muted">Loading item entry…</p>;
+const ItemForm = dynamic(() => import("@/components/item-form").then((module) => module.ItemForm), { loading });
+const ScanUploader = dynamic(() => import("@/components/scan-uploader").then((module) => module.ScanUploader), { loading });
+const BarcodeAdd = dynamic(() => import("@/components/barcode-add").then((module) => module.BarcodeAdd), { loading });
+const ReceiptScan = dynamic(() => import("@/components/receipt-scan").then((module) => module.ReceiptScan), { loading });
 
 type Mode = "barcode" | "scan" | "receipt" | "manual";
 

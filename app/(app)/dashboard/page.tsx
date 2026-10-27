@@ -34,6 +34,7 @@ export default async function DashboardPage() {
   ]);
 
   const upcomingItems = (upcoming.data ?? []) as Item[];
+  const loadError = [total, expired, expiring, recent, upcoming].some((result) => result.error);
 
   return (
     <div className="space-y-6">
@@ -52,6 +53,12 @@ export default async function DashboardPage() {
       </section>
 
       {/* Inventory overview */}
+      {loadError ? (
+        <div role="alert" className="glass space-y-2 p-5 text-sm">
+          <p className="text-danger">Couldn’t load your inventory overview. Your items may still need attention.</p>
+          <Link href="/dashboard" className="inline-flex min-h-10 items-center text-primary underline">Try again</Link>
+        </div>
+      ) : <>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total items" value={total.count ?? 0} icon={Package} />
         <StatCard
@@ -98,6 +105,7 @@ export default async function DashboardPage() {
           </ul>
         )}
       </section>
+      </>}
     </div>
   );
 }

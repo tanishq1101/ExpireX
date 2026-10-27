@@ -15,6 +15,7 @@ const NAV_LINKS = [
 
 export function LandingNav() {
   const [open, setOpen] = React.useState(false);
+  const trigger = React.useRef<HTMLButtonElement>(null);
   const [scrolled, setScrolled] = React.useState(false);
 
   React.useEffect(() => {
@@ -30,6 +31,18 @@ export function LandingNav() {
     return () => {
       document.body.style.overflow = "";
     };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
   return (
@@ -81,9 +94,11 @@ export function LandingNav() {
 
           {/* Mobile menu button */}
           <button
+            ref={trigger}
             type="button"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
+            aria-controls="landing-mobile-menu"
             onClick={() => setOpen((v) => !v)}
             className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface/[0.05] text-foreground transition hover:bg-surface/[0.12] md:hidden"
           >
@@ -100,7 +115,7 @@ export function LandingNav() {
             className="fixed inset-0 top-0 z-30 bg-background/60 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-x-3 top-full z-40 mt-1 animate-fade-up rounded-2xl border border-border bg-background/95 p-3 shadow-2xl backdrop-blur-xl">
+          <div id="landing-mobile-menu" className="absolute inset-x-3 top-full z-40 mt-1 animate-fade-up rounded-2xl border border-border bg-background/95 p-3 shadow-2xl backdrop-blur-xl">
             <nav className="flex flex-col">
               {NAV_LINKS.map((l) => (
                 <a

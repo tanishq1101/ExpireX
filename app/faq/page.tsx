@@ -14,7 +14,7 @@ const FAQS = [
   },
   {
     q: "How does the scanning work?",
-    a: "Take a clear photo of the product label. We read the name and printed expiry date, then ask you to check them before saving. If the date is unclear, you can enter it yourself.",
+    a: "Barcode decoding happens on your device. Label photos are processed on our server using OCR and Google Gemini. Review the details before saving. A barcode identifies a product, not its expiry; medicine needs the printed expiry date. Documents, warranties and subscriptions can be added manually.",
   },
   {
     q: "When will I be reminded?",

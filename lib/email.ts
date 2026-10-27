@@ -1,4 +1,5 @@
 import "server-only";
+import { SITE_URL } from "./site";
 
 const RESEND_API = "https://api.resend.com/emails";
 
@@ -48,7 +49,7 @@ export async function sendWelcomeEmail(to: string, firstName?: string) {
     <li>📅 Get email reminders at 30, 15, 7, 3, and 1 days before expiry</li>
     <li>🛒 Auto-generate a shopping list for soon-to-expire items</li>
   </ul>
-  <a href="https://expire-x-three.vercel.app/dashboard"
+  <a href="${SITE_URL}/dashboard"
      style="display:inline-block;background:#2563EB;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px">
     Open Expire X →
   </a>

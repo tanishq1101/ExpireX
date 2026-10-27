@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
   try {
     const items = await geminiExtractReceipt(buffer.toString("base64"), file.type, todayKolkata());
-    return NextResponse.json({ items });
+    return NextResponse.json({ items: items.map((item) => item.category === "medicine" ? { ...item, expiry_date: null } : item) });
   } catch {
     return NextResponse.json(
       { error: "Couldn’t read the receipt. Try a clearer photo." },

@@ -45,7 +45,7 @@ Rules:
 - Read EVERYTHING printed. Works for food, medicines, cosmetics/makeup/creams/powders, and packaged goods.
 - Dates on Indian packaging are usually DD/MM/YYYY. If only MM/YYYY, use the LAST day of that month.
 - Prefer "best before"/"exp"/"use by"/"use before" for expiry; "mfg"/"mfd"/"pkd"/"packed on" for manufacture.
-- Medicines: read the "EXP" date; set category to "medicine".
+- Medicines: read the printed "EXP" date; set category to "medicine". NEVER estimate a medicine expiry. If no printed expiry is legible, return null expiry_date.
 - Cosmetics/makeup/skincare: set category to "cosmetics". If only a Period-After-Opening symbol ("12M", "24M") is shown and there is no printed expiry, leave expiry_date null.
 - For fresh unpackaged items without a printed date, leave expiry_date, freshness and freshness_note null. A photo cannot establish a safe expiry. Do not estimate dates during label extraction.
 - For PACKAGED goods (sealed carton, bottle, can, blister, jar) with or without a printed date: set "freshness" and "freshness_note" to null. Never invent a visual freshness verdict for sealed packaging.
@@ -342,7 +342,7 @@ Rules:
 - Base the estimate on typical UNOPENED shelf life for this kind of product.
 - Fresh perishables (dairy, produce, bakery, cooked/fresh food) = days to ~2 weeks.
 - Packaged/canned/dry food = months to a couple of years.
-- Medicines (tablets, capsules, syrups, ointments) = typically 1–3 years from manufacture.
+- Medicines: never estimate their expiry; return null expiry_date and confidence.
 - Cosmetics/makeup/creams/powders/skincare = typically 2–3 years unopened; add a tip about the Period-After-Opening (e.g. "Use within 12 months of opening").
 - For documents/warranty/subscription where a shelf life is meaningless, return null expiry/confidence.
 - Tips: at most TWO items. Genuinely useful (e.g. "Refrigerate after opening", "Best consumed within 48h").

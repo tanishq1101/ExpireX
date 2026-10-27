@@ -23,6 +23,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useTheme } from "@/components/theme-provider";
 import { useUser } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
@@ -279,16 +280,19 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
   };
 
   const toggleEmailReminders = async () => {
+    if (!user) return;
     const next = !emailReminders;
     setEmailRemindersBusy(true);
     setEmailReminders(next);
     try {
-      await supabase
+      const { error } = await supabase
         .from("users")
         .update({ email_reminders_enabled: next })
-        .eq("id", user!.id);
+        .eq("id", user.id);
+      if (error) throw error;
     } catch {
       setEmailReminders(!next); // revert on error
+      toast.error("Couldn’t save your reminder preference. Try again.");
     } finally {
       setEmailRemindersBusy(false);
     }

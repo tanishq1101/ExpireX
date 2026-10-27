@@ -4,7 +4,7 @@ import { CATEGORIES } from "./status";
 
 export const categorySchema = z.enum(CATEGORIES);
 
-const dateString = z
+export const dateString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
   .refine(isCalendarDate, "Enter a valid calendar date");
@@ -17,8 +17,8 @@ export const itemFormSchema = z
     expiry_date: dateString,
     manufacture_date: dateString.nullable().optional(),
     quantity: z
-      .union([z.coerce.number().nonnegative(), z.literal("")])
-      .transform((v) => (v === "" ? null : v))
+      .preprocess((v) => typeof v === "string" && !v.trim() ? null : v,
+        z.coerce.number().finite().nonnegative().nullable())
       .nullable()
       .optional(),
     unit: z.string().trim().max(40).nullable().optional(),

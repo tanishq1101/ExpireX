@@ -3,7 +3,7 @@
 // by the contact form's mailto link).
 export const APP_NAME = "Expire X";
 export const CONTACT_EMAIL = "tks2005homes@gmail.com";
-export const SITE_URL = "https://expire-x-three.vercel.app";
+export const SITE_URL = "https://expire-x.tanishqsinha.in";
 
 // Human-readable "last updated" stamp for legal pages.
 export const LEGAL_LAST_UPDATED = "15 June 2026";
