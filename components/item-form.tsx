@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Sparkles, Camera, Info, ScanBarcode } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
-import { uploadItemImage } from "@/lib/storage";
+import { saveItem } from "@/lib/save-item";
 import { externalImageUrl } from "@/lib/utils";
 import { fetchJson } from "@/lib/fetch-json";
 import { addDays } from "@/lib/dates";
@@ -37,6 +37,7 @@ export type ItemFormInitial = Partial<
     | "opened_date"
     | "open_within_days"
     | "image_url"
+    | "expiry_source"
   >
 >;
 
@@ -49,17 +50,23 @@ export function ItemForm({
   pendingImage = null,
   fromScan = false,
   notice,
+  previewUrl,
 }: {
   mode: "create" | "edit";
   initial?: ItemFormInitial;
   pendingImage?: File | null;
   fromScan?: boolean;
   notice?: string;
+  previewUrl?: string;
 }) {
   const router = useRouter();
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
 
+  const [saveId] = useState(() => initial.id ?? crypto.randomUUID());
+  const staged = useRef<{ file: File; path: string } | null>(null);
+  const submitting = useRef(false);
+  const [expirySource, setExpirySource] = useState(initial.expiry_source ?? (initial.expiry_date ? "unknown" : "manual"));
   const [name, setName] = useState(initial.name ?? "");
   const [category, setCategory] = useState<Category>(() => {
     if (initial.category) return initial.category as Category;
@@ -103,6 +110,7 @@ export function ItemForm({
         return;
       }
       setExpiry(est.expiry_date);
+      setExpirySource("estimated");
       setEstimateNote(est.basis ?? "AI-estimated expiry — please confirm.");
       toast.success(`Estimated expiry: ${est.expiry_date}`);
     } catch {
@@ -114,7 +122,7 @@ export function ItemForm({
 
   // Inline OCR: scan the printed label to fill the date and any still-empty fields.
   function handleScanFill(ex: Extraction, scanned: File) {
-    if (ex.expiry_date) setExpiry(ex.expiry_date);
+    if (ex.expiry_date) { setExpiry(ex.expiry_date); setExpirySource(ex.estimated ? "estimated" : "printed"); }
     if (!name.trim() && ex.product_name) {
       setName(ex.brand && !ex.product_name.toLowerCase().includes(ex.brand.toLowerCase())
         ? `${ex.brand} ${ex.product_name}`
@@ -132,10 +140,12 @@ export function ItemForm({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting.current) return;
 
     const parsed = itemFormSchema.safeParse({
       name,
       category,
+      expiry_source: expirySource,
       expiry_date: expiry,
       manufacture_date: mfg || null,
       quantity,
@@ -155,34 +165,22 @@ export function ItemForm({
       return;
     }
 
+    submitting.current = true;
+    let completed = false;
     setSaving(true);
     try {
-      let imageUrl = initial.image_url ?? null;
-      if (file) imageUrl = await uploadItemImage(supabase, userId, file);
-
-      const payload = { ...parsed.data, image_url: imageUrl };
-
-      if (mode === "create") {
-        const { error } = await supabase.from("items").insert({ ...payload, user_id: userId });
-        if (error) throw error;
-        toast.success("Item saved");
-      } else {
-        const { error } = await supabase.from("items").update(payload).eq("id", initial.id!);
-        if (error) throw error;
-        toast.success("Item updated");
-      }
-
-      // Record confirmed scan in the shared barcode catalog (fire-and-forget).
+      const result = await saveItem(supabase, {
+        id: saveId, userId, mode, file, staged, oldImage: initial.image_url ?? null,
+        payload: { ...parsed.data, expiry_confirmed_at: new Date().toISOString() },
+      });
+      completed = true;
+      toast.success(mode === "create" ? "Item saved" : "Item updated");
+      if (result.cleanupWarning) toast.warning("Item saved, but the previous image could not be removed.");
       if (barcode) {
-        fetch("/api/catalog/confirm", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            barcode,
-            name: name.trim(),
-            category,
-            image_url: initial.image_url ?? null,
-          }),
+        // Do not publish user-entered names or private image paths to the shared catalog.
+        await fetch("/api/catalog/confirm", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ item_id: saveId }),
         }).catch(() => {});
       }
 
@@ -191,7 +189,7 @@ export function ItemForm({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save item.");
     } finally {
-      setSaving(false);
+      if (!completed) { submitting.current = false; setSaving(false); }
     }
   }
 
@@ -224,15 +222,15 @@ export function ItemForm({
         </div>
       )}
 
-      {!file && externalImageUrl(initial.image_url) && (
+      {!file && externalImageUrl(previewUrl ?? initial.image_url) && (
         <div className="flex items-center gap-3 rounded-xl border border-border bg-surface/[0.04] p-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={externalImageUrl(initial.image_url)!}
+            src={externalImageUrl(previewUrl ?? initial.image_url)!}
             alt=""
             className="h-14 w-14 rounded-lg border border-border object-cover"
           />
-          <span className="text-xs text-muted">Product image attached from the barcode database.</span>
+          <span className="text-xs text-muted">Attached image. Private previews expire after 15 minutes; reload to refresh.</span>
         </div>
       )}
 
@@ -264,6 +262,7 @@ export function ItemForm({
             value={expiry}
             onChange={(e) => {
               setExpiry(e.target.value);
+              setExpirySource("manual");
               setEstimateNote(null);
             }}
             required
@@ -287,6 +286,8 @@ export function ItemForm({
           <Camera className="h-3.5 w-3.5" /> {showScan ? "Close scanner" : "Scan date from label"}
         </Button>
       </div>
+      <div><Label htmlFor="expiry-source">Date source</Label><Select id="expiry-source" value={expirySource} onChange={(e) => setExpirySource(e.target.value as typeof expirySource)}><option value="manual">Entered manually</option><option value="printed">Read from packaging</option><option value="estimated">Estimated</option><option value="unknown">Unknown (existing item)</option></Select></div>
+      {expirySource === "estimated" && <p className="text-sm text-warning">This date is an estimate. Check the packaging before relying on it.</p>}
       {estimateNote && <p className="text-xs text-muted">✨ {estimateNote}</p>}
       {category === "medicine" && (
         <p className="text-xs text-muted">For medicine, scan or enter the expiry printed on the packaging.</p>

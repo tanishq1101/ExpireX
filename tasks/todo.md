@@ -1,3 +1,7 @@
+> Historical plan, superseded by the October reviews and `docs/reliability-release.md`.
+> Do not restore automatic dates for unreadable labels, clamp estimates to hide past dates,
+> or estimate medicine expiry. Missing printed dates require manual confirmation.
+
 # Max automation: richer AI extraction + wider barcode coverage
 
 ## Plan

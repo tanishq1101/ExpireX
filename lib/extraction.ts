@@ -25,6 +25,7 @@ export function initialFromExtraction(
     name,
     category: ex.category ?? undefined,
     expiry_date: ex.expiry_date ?? undefined,
+    expiry_source: ex.expiry_date ? (ex.estimated ? "estimated" : "printed") : "manual",
     manufacture_date: ex.manufacture_date ?? undefined,
     quantity: ex.quantity ?? undefined,
     unit: ex.unit ?? undefined,

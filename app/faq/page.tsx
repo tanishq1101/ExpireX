@@ -18,7 +18,7 @@ const FAQS = [
   },
   {
     q: "When will I be reminded?",
-    a: "You get email reminders at 30, 15, 7, 3 and 1 days before each item expires, delivered on India (Asia/Kolkata) time so they always land at a sensible hour.",
+    a: "Reminders use 30, 15, 7, 3 and 1-day windows, plus expiry day and one overdue reminder within 7 days. Checks run hourly using the India calendar date. A missed window catches up with the current window, rather than sending every older reminder. You can turn reminder emails and weekly digests off in Settings.",
   },
   {
     q: "Can I scan barcodes?",
@@ -34,7 +34,7 @@ const FAQS = [
   },
   {
     q: "What is the shopping list?",
-    a: "Expire X can automatically add soon-to-expire or expired items to a shopping list so you remember to restock them. You can also add items manually.",
+    a: "Expire X suggests soon-to-expire and expired items for your shopping list. You choose which suggestions to add, or add items manually.",
   },
   {
     q: "Does it cost anything?",

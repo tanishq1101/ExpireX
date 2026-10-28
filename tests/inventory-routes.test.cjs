@@ -32,7 +32,7 @@ const deps = {
   "@/lib/rate-limit": { rateLimit: () => !state.limited },
   "@/services/gemini": {
     geminiEstimateShelfLife: async () => { state.estimates++; return { expiry_date: "2027-01-01", confidence: "low", basis: "Test estimate" }; },
-    geminiExtractReceipt: async () => state.receipt,
+    geminiExtractReceipt: async () => ({ items: state.receipt, warnings: [], detected_count: state.receipt.length, omitted_count: 0 }),
   },
 };
 const original = Module._load;

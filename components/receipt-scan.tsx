@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, ReceiptText, Trash2, Save } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
+import type { ReceiptExtraction } from "@/lib/receipt-extraction";
 import type { ReceiptItem } from "@/lib/validators";
 import { prepareReceiptRows, type ReceiptRow as Row } from "@/lib/receipt-review";
 import { fetchJson } from "@/lib/fetch-json";
@@ -22,6 +23,7 @@ function toRows(items: ReceiptItem[]): Row[] {
     name: it.name,
     category: (it.category as Category) ?? "food",
     expiry: it.expiry_date ?? "",
+    source: it.expiry_date ? "estimated" : "manual",
     qty: it.quantity != null ? String(it.quantity) : "1",
   }));
 }
@@ -31,6 +33,8 @@ export function ReceiptScan() {
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
 
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [acknowledged, setAcknowledged] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -43,10 +47,12 @@ export function ReceiptScan() {
     try {
       const body = new FormData();
       body.append("file", file);
-      const json = await fetchJson<{ items?: ReceiptItem[] }>("/api/receipt", {
+      const json = await fetchJson<ReceiptExtraction>("/api/receipt", {
         method: "POST",
         body,
       });
+      setWarnings(json.warnings ?? []);
+      setAcknowledged(false);
       const items = (json.items ?? []) as ReceiptItem[];
       if (items.length === 0) {
         toast.error("No products found. Try a clearer photo or add items manually.");
@@ -71,7 +77,7 @@ export function ReceiptScan() {
   }
 
   async function saveAll() {
-    if (!rows) return;
+    if (!rows || (warnings.length > 0 && !acknowledged)) return;
     if (!userId) {
       toast.error("Your session ended. Sign in again to save your items.");
       return;
@@ -109,6 +115,7 @@ export function ReceiptScan() {
           not dates read from the pack. Remove any items you don’t want to save.
         </p>
 
+        {warnings.length > 0 && <div role="alert" className="rounded-xl border border-warning/40 p-3 text-sm"><ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul><label className="mt-3 flex min-h-11 items-center gap-2"><input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />I compared these rows with my receipt.</label></div>}
         <div className="space-y-3">
           {rows.map((r, i) => (
             <div key={i} className="glass space-y-2 p-3" role="group" aria-label={`Item ${i + 1}`} aria-describedby={rowErrors[i] ? `receipt-error-${i}` : undefined}>
@@ -148,7 +155,7 @@ export function ReceiptScan() {
                   disabled={saving}
                   type="date"
                   value={r.expiry}
-                  onChange={(e) => update(i, { expiry: e.target.value })}
+                  onChange={(e) => update(i, { expiry: e.target.value, source: "manual" })}
                   aria-label="Expiry date"
                 />
                 <Input
@@ -172,7 +179,7 @@ export function ReceiptScan() {
           <Button variant="ghost" className="flex-1" onClick={() => setRows(null)} disabled={saving}>
             Scan again
           </Button>
-          <Button className="flex-1" onClick={saveAll} disabled={saving || rows.length === 0}>
+          <Button className="flex-1" onClick={saveAll} disabled={saving || rows.length === 0 || (warnings.length > 0 && !acknowledged)}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save all
           </Button>
@@ -188,7 +195,7 @@ export function ReceiptScan() {
         disabled={processing}
         onPick={setFile}
         onClear={() => setFile(null)}
-        hint="Snap or upload a shopping receipt — we’ll list every product and estimate expiries."
+        hint="Snap or upload a shopping receipt — we’ll extract products for you to review. Check for missed rows."
       />
       {file && (
         <Button className="w-full" onClick={process} disabled={processing}>

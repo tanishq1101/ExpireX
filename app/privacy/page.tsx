@@ -41,7 +41,7 @@ export default function PrivacyPage() {
         <li>To create and maintain your account and store your inventory.</li>
         <li>To read product labels and pre-fill item details using OCR and AI.</li>
         <li>To identify products from a scanned barcode and estimate likely shelf life.</li>
-        <li>To send you expiry reminder emails at 30, 15, 7, 3 and 1 days before an item expires.</li>
+        <li>To send expiry reminders and weekly digests when email reminders are enabled.</li>
         <li>To secure the service, prevent abuse, and debug problems.</li>
       </ul>
 
@@ -91,7 +91,7 @@ export default function PrivacyPage() {
       <p>
         We keep your account and inventory data until you delete an item or your account. Deleting an
         item removes it (and its reminder history) permanently. If you delete your account, your
-        associated data is removed.
+        inventory, images, shopping entries, push subscriptions and delivery records are removed after the verified deletion event is processed. Cleanup retries if a service is unavailable. We retain a minimal deleted-account identifier to prevent stale sessions from recreating data.
       </p>
 
       <h2>7. Security</h2>

@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { Menu, X, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonClassName } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -81,16 +81,12 @@ export function LandingNav() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link href="/login" className="hidden sm:block">
-            <Button variant="outline" size="sm">
+          <Link href="/login" className={buttonClassName({ variant: "outline", size: "sm", className: "hidden sm:inline-flex" })}>
               Sign in
-            </Button>
-          </Link>
-          <Link href="/login" className="hidden sm:block">
-            <Button size="sm">
+            </Link>
+          <Link href="/login" className={buttonClassName({ variant: "primary", size: "sm", className: "hidden sm:inline-flex" })}>
               Get started <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+            </Link>
 
           {/* Mobile menu button */}
           <button
@@ -128,14 +124,10 @@ export function LandingNav() {
                 </a>
               ))}
               <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-3">
-                <Link href="/login" onClick={() => setOpen(false)}>
-                  <Button variant="outline" className="w-full">
+                <Link href="/login" onClick={() => setOpen(false)} className={buttonClassName({ variant: "outline", size: "md", className: "w-full" })}>
                     Sign in
-                  </Button>
-                </Link>
-                <Link href="/login" onClick={() => setOpen(false)}>
-                  <Button className="w-full">Get started</Button>
-                </Link>
+                  </Link>
+                <Link href="/login" onClick={() => setOpen(false)} className={buttonClassName({ variant: "primary", size: "md", className: "w-full" })}>Get started</Link>
               </div>
             </nav>
           </div>

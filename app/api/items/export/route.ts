@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!rateLimit(`export:${userId}`, 5, 60_000)) return NextResponse.json({ error: "Please wait a minute before exporting again." }, { status: 429 });
+  if (!await rateLimit(`export:${userId}`, 5, 60_000)) return NextResponse.json({ error: "Please wait a minute before exporting again." }, { status: 429 });
 
   const params = Object.fromEntries(new URL(request.url).searchParams);
   const supabase = await createClient();

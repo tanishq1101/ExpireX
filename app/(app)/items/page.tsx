@@ -1,3 +1,4 @@
+import { withImagePreviews } from "@/lib/storage";
 import Link from "next/link";
 import { PackageOpen, Search } from "lucide-react";
 import { createClient } from "@/services/supabase/server";
@@ -22,7 +23,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
     supabase.from("items").select("location").not("location", "is", null),
   ]);
   const locations = Array.from(new Set(((locRows ?? []) as { location: string | null }[]).map((r) => r.location).filter((l): l is string => !!l))).sort();
-  const items = (data ?? []) as Item[];
+  const items = await withImagePreviews(supabase, (data ?? []) as Item[]);
   const total = count ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasFilters = !!(filters.q || filters.category || filters.status || filters.location);

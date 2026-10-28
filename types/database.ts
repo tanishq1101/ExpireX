@@ -27,15 +27,19 @@ export interface Item {
   opened_date: string | null;
   open_within_days: number | null;
   effective_expiry: string; // DB-generated: soonest of expiry_date and opened+within
+  expiry_source: "unknown" | "manual" | "printed" | "estimated";
+  expiry_revision: number;
+  expiry_confirmed_at: string | null;
+  image_preview_url?: string; // Display only; never persisted.
   image_url: string | null;
   created_at: string;
   updated_at: string;
 }
 
 // effective_expiry is DB-generated, so it is never inserted/updated directly.
-export type ItemInsert = Omit<Item, "id" | "created_at" | "updated_at" | "effective_expiry">;
+export type ItemInsert = Omit<Item, "id" | "created_at" | "updated_at" | "effective_expiry" | "expiry_revision" | "image_preview_url">;
 export type ItemUpdate = Partial<
-  Omit<Item, "id" | "user_id" | "created_at" | "updated_at" | "effective_expiry">
+  Omit<Item, "id" | "user_id" | "created_at" | "updated_at" | "effective_expiry" | "expiry_revision" | "image_preview_url">
 >;
 
 export interface ShoppingItem {

@@ -14,6 +14,7 @@ export const itemFormSchema = z
   .object({
     name: z.string().trim().min(1, "Name is required").max(200),
     category: categorySchema,
+    expiry_source: z.enum(["manual", "printed", "estimated", "unknown"]).optional(),
     expiry_date: dateString,
     manufacture_date: dateString.nullable().optional(),
     quantity: z
@@ -32,6 +33,7 @@ export const itemFormSchema = z
       .nullable()
       .optional(),
   })
+  .refine((v) => v.category !== "medicine" || v.expiry_source !== "estimated", { path: ["expiry_source"], message: "Use the printed expiry date for medicine." })
   .refine(
     (v) => !v.manufacture_date || v.manufacture_date <= v.expiry_date,
     { path: ["manufacture_date"], message: "Manufacture date must be on/before expiry" }

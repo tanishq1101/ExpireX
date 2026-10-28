@@ -1,3 +1,4 @@
+import { readJson } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { geminiEstimateShelfLife } from "@/services/gemini";
@@ -13,12 +14,12 @@ export const maxDuration = 30;
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!rateLimit(`estimate:${userId}`, 30, 60_000))
+  if (!await rateLimit(`estimate:${userId}`, 30, 60_000))
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
 
   let body: { name?: unknown; category?: unknown; base_date?: unknown };
   try {
-    body = await request.json();
+    body = await readJson(request) as typeof body;
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid body");
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });

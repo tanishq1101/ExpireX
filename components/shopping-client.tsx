@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Check, Trash2, ShoppingCart, Sparkles, Eraser } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
@@ -32,6 +32,7 @@ export function ShoppingClient({
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
 
+  const lock = useRef(false);
   const [list, setList] = useState<ShoppingItem[]>(initialList);
   const [suggestions, setSuggestions] = useState<Suggestion[]>(initialSuggestions);
   const [name, setName] = useState("");
@@ -45,6 +46,10 @@ export function ShoppingClient({
     item_id?: string | null;
   }) {
     if (!userId) return toast.error("Please sign in again.");
+    if (lock.current) return null;
+    lock.current = true;
+    setBusy(true);
+    try {
     const payload = {
       user_id: userId,
       name: row.name.trim(),
@@ -55,20 +60,20 @@ export function ShoppingClient({
     };
     const { data, error } = await supabase.from("shopping_list").insert(payload).select("*").single();
     if (error || !data) {
-      toast.error(error?.message ?? "Couldn't add item.");
+      toast.error(error?.code === "23505" ? "This item is already on your list. Reload to see it." : error?.message ?? "Couldn't add item.");
       return null;
     }
     setList((prev) => [data as ShoppingItem, ...prev]);
     return data as ShoppingItem;
+    } catch { toast.error("Couldn’t add this item. Try again."); return null; }
+    finally { lock.current = false; setBusy(false); }
   }
 
   async function addManual(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    setBusy(true);
     const added = await addRow({ name, source: "manual" });
     if (added) setName("");
-    setBusy(false);
   }
 
   async function acceptSuggestion(s: Suggestion) {
@@ -86,17 +91,21 @@ export function ShoppingClient({
   }
 
   async function toggle(row: ShoppingItem) {
-    const next = !row.checked;
-    setList((prev) => prev.map((r) => (r.id === row.id ? { ...r, checked: next } : r)));
-    const { error } = await supabase.from("shopping_list").update({ checked: next }).eq("id", row.id);
-    if (error) {
-      setList((prev) => prev.map((r) => (r.id === row.id ? { ...r, checked: !next } : r)));
-      toast.error("Couldn't update.");
-    }
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    try {
+      const next = !row.checked;
+      const { data, error } = await supabase.from("shopping_list").update({ checked: next }).eq("id", row.id).select("id").maybeSingle();
+      if (error || !data) throw new Error("Couldn't update this item. Reload and try again.");
+      setList((prev) => prev.map((r) => r.id === row.id ? { ...r, checked: next } : r));
+    } catch { toast.error("Couldn't update. Your list hasn't changed."); }
+    finally { lock.current = false; setBusy(false); }
   }
 
   async function remove(row: ShoppingItem) {
-    if (busy) return;
+    if (lock.current) return;
+    lock.current = true;
     setBusy(true);
     try {
       const { error } = await supabase.from("shopping_list").delete().eq("id", row.id);
@@ -105,14 +114,16 @@ export function ShoppingClient({
     } catch {
       toast.error("Couldn’t remove this item. It’s still in your list — try again.");
     } finally {
+      lock.current = false;
       setBusy(false);
     }
   }
 
   async function clearChecked() {
-    if (busy) return;
+    if (lock.current) return;
+    lock.current = true;
     const checkedIds = list.filter((r) => r.checked).map((r) => r.id);
-    if (checkedIds.length === 0) return;
+    if (checkedIds.length === 0) { lock.current = false; return; }
     setBusy(true);
     try {
       const { error } = await supabase.from("shopping_list").delete().in("id", checkedIds);
@@ -122,6 +133,7 @@ export function ShoppingClient({
     } catch {
       toast.error("Couldn’t clear these items. Your list hasn’t changed — try again.");
     } finally {
+      lock.current = false;
       setBusy(false);
     }
   }

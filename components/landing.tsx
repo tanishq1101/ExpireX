@@ -16,7 +16,7 @@ import {
   FileText,
   ScanBarcode,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonClassName } from "@/components/ui/button";
 import { LandingNav } from "@/components/landing-nav";
 
 const CATEGORIES = ["Food", "Medicine", "Cosmetics", "Documents", "Warranty", "Subscriptions", "Other"];
@@ -42,7 +42,7 @@ const FEATURES = [
   {
     icon: BellRing,
     title: "Timed reminders",
-    body: "Email nudges at 30, 15, 7, 3 and 1 days before expiry, on India time. Never get surprised.",
+    body: "Email reminders as expiry approaches, on the expiry day, and once overdue. Manage them in Settings.",
   },
   {
     icon: LayoutDashboard,
@@ -83,7 +83,7 @@ const FAQS = [
   },
   {
     q: "When will I be reminded?",
-    a: "You get email reminders at 30, 15, 7, 3 and 1 days before each item expires, delivered on India (Asia/Kolkata) time so they always land at a sensible hour.",
+    a: "Reminders use 30, 15, 7, 3 and 1-day windows, plus expiry day and one overdue reminder within 7 days. Checks run hourly using the India calendar date. A missed window catches up with the current window, rather than sending every older reminder. You can turn reminder emails and weekly digests off in Settings.",
   },
   {
     q: "Is my data private?",
@@ -123,21 +123,17 @@ export function Landing() {
             </p>
 
             <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:items-start">
-              <Link href="/login" className="w-full sm:w-auto">
-                <Button size="md" className="h-12 w-full px-7 text-[15px] sm:w-auto">
+              <Link href="/login" className={buttonClassName({ variant: "primary", size: "md", className: "w-full sm:w-auto h-12 w-full px-7 text-[15px] sm:w-auto" })}>
                   Get started free <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="#how" className="w-full sm:w-auto">
-                <Button variant="outline" size="md" className="h-12 w-full px-7 text-[15px] sm:w-auto">
+                </Link>
+              <Link href="#how" className={buttonClassName({ variant: "outline", size: "md", className: "w-full sm:w-auto h-12 w-full px-7 text-[15px] sm:w-auto" })}>
                   See how it works
-                </Button>
-              </Link>
+                </Link>
             </div>
 
             <p className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted lg:justify-start">
               <span className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Free forever
+                <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Free to use
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> No credit card
@@ -267,11 +263,9 @@ export function Landing() {
           <p className="mx-auto mt-3 max-w-md text-sm text-muted sm:text-base">
             Free to use. Your first scan is the only setup you need.
           </p>
-          <Link href="/login" className="mt-7 inline-block">
-            <Button size="md" className="h-12 px-8 text-[15px]">
+          <Link href="/login" className={buttonClassName({ variant: "primary", size: "md", className: "mt-7 inline-flex h-12 px-8 text-[15px]" })}>
               Get started free <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+            </Link>
         </div>
       </section>
 

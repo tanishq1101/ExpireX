@@ -8,3 +8,11 @@ require.extensions[".ts"] = (module, filename) => {
   });
   module._compile(outputText, filename);
 };
+
+// Resolve the same project alias used by Next.js without replacing dependency mocks.
+const Module = require("node:module");
+const path = require("node:path");
+const resolve = Module._resolveFilename;
+Module._resolveFilename = function(id, ...args) {
+  return resolve.call(this, id.startsWith("@/") ? path.join(__dirname, "..", id.slice(2)) : id, ...args);
+};

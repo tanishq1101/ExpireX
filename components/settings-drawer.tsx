@@ -1,4 +1,5 @@
 "use client";
+import { usePush } from "@/lib/use-push";
 
 import * as React from "react";
 import Link from "next/link";
@@ -34,82 +35,6 @@ import type { Category } from "@/types/database";
 /* ------------------------------------------------------------------ */
 /*  Inline push-notification toggle                                     */
 /* ------------------------------------------------------------------ */
-const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
-
-function urlBase64ToUint8Array(base64: string) {
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
-  const b64 = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(b64);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-
-function useDrawerPush() {
-  const [supported, setSupported] = React.useState(false);
-  const [enabled, setEnabled] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
-
-  React.useEffect(() => {
-    const ok =
-      typeof window !== "undefined" &&
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      !!VAPID_PUBLIC;
-    setSupported(ok);
-    if (!ok) return;
-    navigator.serviceWorker.ready
-      .then((reg) => reg.pushManager.getSubscription())
-      .then((sub) => setEnabled(!!sub))
-      .catch(() => {});
-  }, []);
-
-  const toggle = React.useCallback(async () => {
-    setBusy(true);
-    try {
-      if (enabled) {
-        const reg = await navigator.serviceWorker.ready;
-        const sub = await reg.pushManager.getSubscription();
-        if (sub) {
-          await fetch("/api/push/subscribe", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ endpoint: sub.endpoint }),
-          }).catch(() => {});
-          await sub.unsubscribe();
-        }
-        setEnabled(false);
-      } else {
-        const permission = await Notification.requestPermission();
-        if (permission !== "granted") return;
-        const reg = await navigator.serviceWorker.ready;
-        const sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
-        });
-        const json = sub.toJSON();
-        const res = await fetch("/api/push/subscribe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            endpoint: json.endpoint,
-            p256dh: json.keys?.p256dh,
-            auth: json.keys?.auth,
-          }),
-        });
-        if (!res.ok) throw new Error("save failed");
-        setEnabled(true);
-      }
-    } catch {
-      /* silent */
-    } finally {
-      setBusy(false);
-    }
-  }, [enabled]);
-
-  return { supported, enabled, busy, toggle };
-}
-
 /* ------------------------------------------------------------------ */
 /*  Toggle switch                                                       */
 /* ------------------------------------------------------------------ */
@@ -214,6 +139,7 @@ interface SettingsDrawerProps {
 }
 
 export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
+  const dialogRef = React.useRef<HTMLDivElement>(null);
   const [open, setOpen] = React.useState(false);
   const [closing, setClosing] = React.useState(false);
   const [panel, setPanel] = React.useState<"main" | "settings">("main");
@@ -228,7 +154,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
   const [settingsLoaded, setSettingsLoaded] = React.useState(false);
 
   const { theme, toggle: toggleTheme } = useTheme();
-  const push = useDrawerPush();
+  const push = usePush();
   const isDark = theme === "dark";
 
   const { user } = useUser();
@@ -285,11 +211,11 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
     setEmailRemindersBusy(true);
     setEmailReminders(next);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("users")
         .update({ email_reminders_enabled: next })
-        .eq("id", user.id);
-      if (error) throw error;
+        .eq("id", user.id).select("id").maybeSingle();
+      if (error || !data) throw new Error("Preference was not saved");
     } catch {
       setEmailReminders(!next); // revert on error
       toast.error("Couldn’t save your reminder preference. Try again.");
@@ -309,18 +235,25 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
     }, 250);
   }, []);
 
-  /* Lock body scroll while open */
-  React.useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
-
-  /* Close on Escape */
+  /* Trap keyboard focus and return it to the opener when the modal closes. */
   React.useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") handleClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const opener = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const controls = () => Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('aside button:not(:disabled), aside a[href], aside input:not(:disabled), aside select:not(:disabled)') ?? []);
+    controls()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); handleClose(); }
+      if (event.key !== "Tab") return;
+      const elements = controls();
+      const first = elements[0], last = elements.at(-1);
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !dialogRef.current?.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = previousOverflow; opener?.focus(); };
   }, [open, handleClose]);
 
   return (
@@ -340,7 +273,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50" aria-modal="true" role="dialog">
+        <div ref={dialogRef} className="fixed inset-0 z-50" aria-modal="true" role="dialog" aria-label="Settings">
           {/* Backdrop */}
           <button
             type="button"
@@ -533,7 +466,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                       <div>
                         <div className="text-sm font-medium text-foreground">Scan engine</div>
                         <div className="text-[11px] text-muted">
-                          AI vision is more accurate; Tesseract works offline
+                          AI vision or server OCR fallback; both require a connection
                         </div>
                       </div>
                     </div>
@@ -543,7 +476,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                       className="text-sm"
                     >
                       <option value="ai">AI vision (recommended)</option>
-                      <option value="tesseract">Tesseract OCR (offline)</option>
+                      <option value="tesseract">Tesseract OCR (server)</option>
                     </Select>
                   </div>
 
@@ -584,7 +517,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                           </div>
                         )}
                         <div className="truncate text-[11px] text-muted">
-                          {user?.emailAddresses[0]?.emailAddress ?? ""}
+                          {user?.primaryEmailAddress?.emailAddress ?? ""}
                         </div>
                       </div>
                     </div>

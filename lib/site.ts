@@ -3,7 +3,7 @@
 // by the contact form's mailto link).
 export const APP_NAME = "Expire X";
 export const CONTACT_EMAIL = "tks2005homes@gmail.com";
-export const SITE_URL = "https://expire-x.tanishqsinha.in";
+export { SITE_URL } from "../supabase/functions/_shared/site";
 
 // Human-readable "last updated" stamp for legal pages.
-export const LEGAL_LAST_UPDATED = "15 June 2026";
+export const LEGAL_LAST_UPDATED = "28 October 2026";

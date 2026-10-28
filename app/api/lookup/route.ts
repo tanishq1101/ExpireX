@@ -22,7 +22,7 @@ type CatalogRow = {
 export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!rateLimit(`lookup:${userId}`, 30, 60_000))
+  if (!await rateLimit(`lookup:${userId}`, 30, 60_000))
     return NextResponse.json({ error: "Too many requests — please slow down." }, { status: 429 });
 
   const barcode = new URL(request.url).searchParams.get("barcode")?.trim();
@@ -38,6 +38,7 @@ export async function GET(request: Request) {
       .from("barcode_catalog")
       .select("name, brand, size, category, image_url")
       .eq("barcode", barcode)
+      .eq("source", "api")
       .maybeSingle<CatalogRow>();
 
     if (cached) {
@@ -74,7 +75,7 @@ export async function GET(request: Request) {
             source: "api",
             confirmed_count: 0,
           },
-          { onConflict: "barcode" }
+          { onConflict: "barcode", ignoreDuplicates: true }
         )
         .then(() => {});
     }

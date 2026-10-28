@@ -16,6 +16,10 @@ const sizes: Record<Size, string> = {
   icon: "h-11 w-11",
 };
 
+export function buttonClassName({ variant = "primary", size = "md", className }: { variant?: Variant; size?: Size; className?: string } = {}) {
+  return cn("inline-flex items-center justify-center gap-2 rounded-xl font-medium transition outline-none", "focus-visible:ring-2 focus-visible:ring-primary/50 disabled:pointer-events-none disabled:opacity-50", variants[variant], sizes[size], className);
+}
+
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
@@ -25,13 +29,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "md", ...props }, ref) => (
     <button
       ref={ref}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition outline-none",
-        "focus-visible:ring-2 focus-visible:ring-primary/50 disabled:pointer-events-none disabled:opacity-50",
-        variants[variant],
-        sizes[size],
-        className
-      )}
+      className={buttonClassName({ variant, size, className })}
       {...props}
     />
   )

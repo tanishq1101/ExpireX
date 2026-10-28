@@ -25,7 +25,7 @@ export function inventoryFilters(params: InventoryParams) {
   return {
     q: value("q").trim().slice(0, 200),
     category: categoryGuard(category) ? category : undefined,
-    status: ["expired", "expiring", "ok"].includes(status) ? status : undefined,
+    status: ["expired", "expiring", "ok", "today", "week"].includes(status) ? status : undefined,
     location: value("location").trim().slice(0, 60),
     sort: Object.hasOwn(INVENTORY_SORTS, sort) ? sort as keyof typeof INVENTORY_SORTS : "expiry" as const,
     page: /^\d{1,6}$/.test(page) ? Math.max(1, Number(page)) : 1,
@@ -40,6 +40,8 @@ export function inventoryQuery(supabase: SupabaseClient, params: InventoryParams
   if (filters.q) query = query.ilike("name", `%${filters.q.replace(/[\\%_]/g, "\\$&")}%`);
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.location) query = query.eq("location", filters.location);
+  if (filters.status === "today") query = query.eq("effective_expiry", today);
+  if (filters.status === "week") query = query.gte("effective_expiry", today).lte("effective_expiry", addDays(today, 7));
   if (filters.status === "expired") query = query.lt("effective_expiry", today);
   if (filters.status === "expiring") query = query.gte("effective_expiry", today).lte("effective_expiry", addDays(today, EXPIRING_WINDOW_DAYS));
   if (filters.status === "ok") query = query.gt("effective_expiry", addDays(today, EXPIRING_WINDOW_DAYS));

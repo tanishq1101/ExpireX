@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Trash2, Loader2 } from "lucide-react";
 import { useSupabaseClient } from "@/services/supabase/client";
-import { removeItemImage } from "@/lib/storage";
+import { removeUnreferencedImage } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 
 export function DeleteItemButton({ id, imageUrl }: { id: string; imageUrl: string | null }) {
@@ -19,7 +19,10 @@ export function DeleteItemButton({ id, imageUrl }: { id: string; imageUrl: strin
     try {
       const { error } = await supabase.from("items").delete().eq("id", id);
       if (error) throw error;
-      if (imageUrl) await removeItemImage(supabase, imageUrl);
+      if (imageUrl) {
+        try { await removeUnreferencedImage(supabase, imageUrl); }
+        catch { toast.warning("Item deleted, but its image could not be removed."); }
+      }
       toast.success("Item deleted");
       router.push("/items");
       router.refresh();

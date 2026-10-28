@@ -1,3 +1,4 @@
+import { readImageForm } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { geminiExtractFromImage, geminiExtract } from "@/services/gemini";
@@ -19,12 +20,12 @@ export async function POST(request: Request) {
   // Require an authenticated user — don't burn AI quota for anonymous callers.
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!rateLimit(`scan:${userId}`, 20, 60_000))
+  if (!await rateLimit(`scan:${userId}`, 20, 60_000))
     return NextResponse.json({ error: "Too many scans — please slow down." }, { status: 429 });
 
   let file: File | null = null;
   try {
-    const form = await request.formData();
+    const form = await readImageForm(request);
     const f = form.get("file");
     if (f instanceof File) file = f;
   } catch {

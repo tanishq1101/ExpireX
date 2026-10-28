@@ -10,7 +10,7 @@ import type { Item } from "@/types/database";
 export function ItemRow({ item, today }: { item: Item; today: string }) {
   const status = getStatus(today, item.effective_expiry);
   const meta = STATUS_META[status];
-  const img = externalImageUrl(item.image_url);
+  const img = externalImageUrl(item.image_preview_url ?? item.image_url);
   const opened = item.opened_date && item.effective_expiry < item.expiry_date;
 
   return (
@@ -34,12 +34,12 @@ export function ItemRow({ item, today }: { item: Item; today: string }) {
           <p className="truncate text-xs text-muted">
             {relativeLabel(today, item.effective_expiry)}
             {opened ? " · opened" : ""}
+            {item.expiry_source === "estimated" ? " · estimated date" : ""}
             {item.location ? ` · ${item.location}` : ""}
             {item.quantity != null ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ""}` : ""}
           </p>
         </div>
-        <Badge className={cn("hidden sm:inline-flex", meta.tone)}>{meta.label}</Badge>
-        <span className={cn("h-2 w-2 rounded-full sm:hidden", meta.tone)} />
+        <Badge className={cn(meta.tone)}>{meta.label}</Badge>
         <ChevronRight className="h-4 w-4 text-muted transition group-hover:translate-x-0.5 group-hover:text-foreground" />
       </Link>
     </li>

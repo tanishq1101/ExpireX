@@ -1,3 +1,4 @@
+import { readImageForm } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { geminiExtractReceipt } from "@/services/gemini";
@@ -13,12 +14,12 @@ const MAX_BYTES = 8 * 1024 * 1024;
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!rateLimit(`receipt:${userId}`, 10, 60_000))
+  if (!await rateLimit(`receipt:${userId}`, 10, 60_000))
     return NextResponse.json({ error: "Too many receipts — please slow down." }, { status: 429 });
 
   let file: File | null = null;
   try {
-    const form = await request.formData();
+    const form = await readImageForm(request);
     const f = form.get("file");
     if (f instanceof File) file = f;
   } catch {
@@ -33,8 +34,8 @@ export async function POST(request: Request) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   try {
-    const items = await geminiExtractReceipt(buffer.toString("base64"), file.type, todayKolkata());
-    return NextResponse.json({ items: items.map((item) => item.category === "medicine" ? { ...item, expiry_date: null } : item) });
+    const result = await geminiExtractReceipt(buffer.toString("base64"), file.type, todayKolkata());
+    return NextResponse.json({ ...result, items: result.items.map((item) => item.category === "medicine" ? { ...item, expiry_date: null } : item) });
   } catch {
     return NextResponse.json(
       { error: "Couldn’t read the receipt. Try a clearer photo." },

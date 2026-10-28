@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { withImagePreviews } from "@/lib/storage";
 import { notFound } from "next/navigation";
 import { createClient } from "@/services/supabase/server";
 import { todayKolkata, relativeLabel } from "@/lib/dates";
@@ -15,13 +17,14 @@ export default async function EditItemPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data } = await supabase.from("items").select("*").eq("id", id).single();
+  const { data, error } = await supabase.from("items").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error("Could not load this item. Please retry.");
   if (!data) notFound();
-  const item = data as Item;
+  const [item] = await withImagePreviews(supabase, [data as Item]);
 
   const today = todayKolkata();
   const status = getStatus(today, item.effective_expiry);
-  const img = externalImageUrl(item.image_url);
+  const img = externalImageUrl(item.image_preview_url ?? item.image_url);
 
   return (
     <div className="space-y-5">
@@ -46,8 +49,13 @@ export default async function EditItemPage({ params }: { params: Promise<{ id: s
         <Badge className={cn(STATUS_META[status].tone)}>{STATUS_META[status].label}</Badge>
       </div>
 
+      <div className="flex flex-wrap gap-3 text-sm">
+        <Link className="inline-flex min-h-11 items-center rounded-xl border border-border px-3" href={`/items/new?batch=${item.id}`}>Add another batch</Link>
+        {["documents", "warranty", "subscription"].includes(item.category) && <a className="inline-flex min-h-11 items-center rounded-xl border border-border px-3" href={`/api/items/${item.id}/calendar`}>Download calendar reminder</a>}
+      </div>
+      {["documents", "warranty", "subscription"].includes(item.category) && <p className="text-xs text-muted">Calendar downloads are snapshots. Download again after changing the date; your calendar may ask whether to update the existing event.</p>}
       <div className="glass p-5">
-        <ItemForm mode="edit" initial={item} />
+        <ItemForm mode="edit" initial={item} previewUrl={item.image_preview_url} />
       </div>
 
       <div className="flex justify-end">

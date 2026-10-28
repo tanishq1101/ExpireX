@@ -1,11 +1,12 @@
 "use client";
+import { detachPush } from "@/lib/use-push";
+import { toast } from "sonner";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 import { LayoutDashboard, Package, Plus, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { SettingsDrawer } from "@/components/settings-drawer";
 
 const links = [
@@ -18,8 +19,9 @@ export function AppNav({ email }: { email: string }) {
   const pathname = usePathname();
   const { signOut } = useClerk();
 
-  function handleSignOut() {
-    signOut({ redirectUrl: "/" });
+  async function handleSignOut() {
+    try { await detachPush(); await signOut({ redirectUrl: "/" }); }
+    catch { toast.error("Could not detach this device. Retry signing out."); }
   }
 
   return (
@@ -52,10 +54,8 @@ export function AppNav({ email }: { email: string }) {
             </Link>
           );
         })}
-        <Link href="/items/new" className="ml-auto">
-          <Button size="sm">
+        <Link href="/items/new" className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-3 text-sm text-primary-foreground">
             <Plus className="h-4 w-4" /> Add item
-          </Button>
         </Link>
       </nav>
 

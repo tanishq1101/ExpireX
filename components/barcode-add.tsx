@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, ScanBarcode, Plus, Package } from "lucide-react";
-import { useAuth } from "@clerk/nextjs";
+import { Loader2, ScanBarcode, Package } from "lucide-react";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { relativeLabel, todayKolkata } from "@/lib/dates";
 import type { ProductLookup, ShelfLife, Extraction } from "@/lib/validators";
 import { fetchJson } from "@/lib/fetch-json";
+import { anotherBatch } from "@/lib/batch";
+import type { Item } from "@/types/database";
 import { initialFromExtraction } from "@/lib/extraction";
 import type { ItemFormInitial } from "@/components/item-form";
 import { BarcodeScanner } from "@/components/barcode-scanner";
@@ -17,16 +17,14 @@ import { ScanRejected } from "@/components/scan-rejected";
 import { ProductAnalysisCard, type Analysis } from "@/components/product-analysis-card";
 import { Button } from "@/components/ui/button";
 
-type Existing = { id: string; name: string; quantity: number | null; unit: string | null; expiry_date: string };
+type Existing = Pick<Item, "id" | "name" | "category" | "quantity" | "unit" | "expiry_date" | "location" | "image_url">;
 
 export function BarcodeAdd({
   onResolved,
 }: {
   onResolved: (initial: ItemFormInitial, notice: string, file?: File) => void;
 }) {
-  const router = useRouter();
   const supabase = useSupabaseClient();
-  const { userId } = useAuth();
 
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<
@@ -64,6 +62,7 @@ export function BarcodeAdd({
           let notice: string;
           if (est.expiry_date) {
             initial.expiry_date = est.expiry_date;
+            initial.expiry_source = "estimated";
             notice = `Identified "${initial.name}" by barcode. Expiry is an AI estimate${
               est.basis ? ` (${est.basis})` : ""
             } — please confirm or scan the printed date.`;
@@ -90,12 +89,12 @@ export function BarcodeAdd({
         fetchJson<ProductLookup>(`/api/lookup?barcode=${encodeURIComponent(barcode)}`),
         supabase
           .from("items")
-          .select("id,name,quantity,unit,expiry_date")
+          .select("id,name,category,quantity,unit,expiry_date,location,image_url")
           .eq("barcode", barcode)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle()
-          .then((r) => (r.data as Existing) ?? null),
+          .then((r) => { if (r.error) throw r.error; return (r.data as Existing) ?? null; }),
       ]);
       product = p;
       existingRow = ex;
@@ -128,7 +127,7 @@ export function BarcodeAdd({
     if (existingRow) {
       setExisting(existingRow);
       setPending({
-        initial,
+        initial: { ...anotherBatch(existingRow), ...initial, name: initial.name || existingRow.name, category: initial.category ?? existingRow.category },
         notice: product.found ? `Identified "${initial.name}" by barcode.` : `Barcode ${barcode} saved.`,
       });
       setStep("exists");
@@ -161,22 +160,6 @@ export function BarcodeAdd({
     setBusy(false);
     toast.success("Product identified");
     runEstimate(initial.name ?? "", initial.category ?? "other");
-  }
-
-  async function incrementExisting() {
-    if (!existing) return;
-    setBusy(true);
-    try {
-      const next = (existing.quantity ?? 1) + 1;
-      const { error } = await supabase.from("items").update({ quantity: next }).eq("id", existing.id);
-      if (error) throw error;
-      toast.success(`Updated "${existing.name}" — quantity ${next}`);
-      router.push("/items");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't update quantity.");
-      setBusy(false);
-    }
   }
 
   if (step === "looking" || busy) {
@@ -217,17 +200,13 @@ export function BarcodeAdd({
             </p>
           </div>
         </div>
-        <p className="text-sm text-muted">You&apos;ve scanned this product before. Add one more, or save it as a separate entry?</p>
+        <p className="text-sm text-muted">This product is already tracked. Save a separate batch and enter its printed expiry; the existing batch stays unchanged.</p>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Button className="flex-1" onClick={incrementExisting}>
-            <Plus className="h-4 w-4" /> Add +1 to existing
-          </Button>
           <Button
-            variant="outline"
             className="flex-1"
             onClick={() => onResolved(pending.initial, pending.notice)}
           >
-            Add as new item
+            Add new batch
           </Button>
         </div>
         <Button variant="ghost" className="w-full" onClick={() => setStep("intro")}>

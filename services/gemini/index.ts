@@ -1,16 +1,14 @@
+import { parseReceiptExtraction, type ReceiptExtraction } from "@/lib/receipt-extraction";
 import "server-only";
 import { isCalendarDate } from "@/lib/calendar-date";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   extractionSchema,
   shelfLifeSchema,
-  receiptSchema,
-  receiptItemSchema,
   emptyExtraction,
   emptyShelfLife,
   type Extraction,
   type ShelfLife,
-  type ReceiptItem,
 } from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
 
@@ -58,7 +56,7 @@ function model() {
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");
   return new GoogleGenerativeAI(apiKey).getGenerativeModel({
     model: MODEL,
-    generationConfig: { responseMimeType: "application/json", temperature: 0 },
+    generationConfig: { responseMimeType: "application/json", temperature: 0, maxOutputTokens: 8192 },
   });
 }
 
@@ -76,8 +74,8 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** 1–2 retries with exponential backoff on 429/5xx. */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+/** One bounded retry for transient errors; leave time for the route fallback. */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
   let last: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -260,42 +258,6 @@ function parseShelfLife(raw: string): ShelfLife {
   return out;
 }
 
-function parseReceipt(raw: string): ReceiptItem[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-
-  const full = receiptSchema.safeParse(parsed);
-  if (full.success) return full.data.items;
-
-  // Salvage individual line items when the wrapper or one bad row would fail the whole batch.
-  const items =
-    parsed && typeof parsed === "object" && !Array.isArray(parsed) && Array.isArray((parsed as { items?: unknown }).items)
-      ? (parsed as { items: unknown[] }).items
-      : Array.isArray(parsed)
-        ? parsed
-        : [];
-
-  const out: ReceiptItem[] = [];
-  for (const row of items) {
-    if (!row || typeof row !== "object") continue;
-    const r = row as Record<string, unknown>;
-    const candidate = {
-      name: typeof r.name === "string" ? r.name.trim().slice(0, 200) : "",
-      category: typeof r.category === "string" ? r.category : null,
-      expiry_date: asIsoDate(r.expiry_date) ?? null,
-      quantity: asNonNegNumber(r.quantity) ?? null,
-    };
-    const safe = receiptItemSchema.safeParse(candidate);
-    if (safe.success) out.push(safe.data);
-    if (out.length >= 50) break;
-  }
-  return out;
-}
-
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /** Primary path: send the label photo straight to Gemini (OCR + extraction in one call). */
@@ -311,7 +273,7 @@ ${RULES}`;
     model().generateContent([
       { text: prompt },
       { inlineData: { data: imageBase64, mimeType } },
-    ])
+    ], { timeout: 10000 })
   );
   return parse(result.response.text());
 }
@@ -347,7 +309,7 @@ Rules:
 - For documents/warranty/subscription where a shelf life is meaningless, return null expiry/confidence.
 - Tips: at most TWO items. Genuinely useful (e.g. "Refrigerate after opening", "Best consumed within 48h").
 - Never return a date before the base date. Be realistic, not optimistic.`;
-  const result = await withRetry(() => model().generateContent(prompt));
+  const result = await withRetry(() => model().generateContent(prompt, { timeout: 10000 }));
   return parseShelfLife(result.response.text());
 }
 
@@ -356,7 +318,7 @@ export async function geminiExtractReceipt(
   imageBase64: string,
   mimeType: string,
   today: string
-): Promise<ReceiptItem[]> {
+): Promise<ReceiptExtraction> {
   const prompt = `You read a photo of a shopping receipt and list the purchasable products on it.
 Today's date is ${today} (Asia/Kolkata). Use the receipt/purchase date if visible, else today, as the base date.
 
@@ -375,9 +337,9 @@ Rules:
     model().generateContent([
       { text: prompt },
       { inlineData: { data: imageBase64, mimeType } },
-    ])
+    ], { timeout: 10000 })
   );
-  return parseReceipt(result.response.text());
+  return parseReceiptExtraction(result.response.text());
 }
 
 /** Fallback path: extract from OCR text (used when image extraction fails, after Tesseract). */
@@ -390,6 +352,6 @@ OCR TEXT:
 """
 ${rawText.slice(0, 4000)}
 """`;
-  const result = await withRetry(() => model().generateContent(prompt));
+  const result = await withRetry(() => model().generateContent(prompt, { timeout: 10000 }));
   return parse(result.response.text());
 }

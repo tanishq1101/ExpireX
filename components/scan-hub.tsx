@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 import type { Extraction } from "@/lib/validators";
 import { initialFromExtraction } from "@/lib/extraction";
 import type { ItemFormInitial } from "@/components/item-form";
+import { DeferredItemForm as ItemForm } from "@/components/deferred-item-form";
 
 const loading = () => <p role="status" className="py-6 text-center text-sm text-muted">Loading item entry…</p>;
-const ItemForm = dynamic(() => import("@/components/item-form").then((module) => module.ItemForm), { loading });
 const ScanUploader = dynamic(() => import("@/components/scan-uploader").then((module) => module.ScanUploader), { loading });
 const BarcodeAdd = dynamic(() => import("@/components/barcode-add").then((module) => module.BarcodeAdd), { loading });
 const ReceiptScan = dynamic(() => import("@/components/receipt-scan").then((module) => module.ReceiptScan), { loading });

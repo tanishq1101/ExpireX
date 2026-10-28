@@ -25,6 +25,7 @@ enum Category {
   warranty
   subscription
   other
+  @@map("category")
 }
 
 enum ReminderType {
@@ -33,12 +34,14 @@ enum ReminderType {
   d7
   d3
   d1
+  @@map("reminder_type")
 }
 
 model User {
   id                    String   @id // Clerk user id (text, e.g. user_2ab...)
   email                 String
   emailRemindersEnabled Boolean  @default(true) @map("email_reminders_enabled")
+  clerkUpdatedAt        BigInt   @default(0) @map("clerk_updated_at")
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   items            Item[]
@@ -63,6 +66,9 @@ model Item {
   openWithinDays  Int?      @map("open_within_days")
   // DB-generated (least(expiry_date, opened_date + open_within_days)); managed via SQL, not Prisma.
   effectiveExpiry DateTime? @map("effective_expiry") @db.Date
+  expirySource    String    @default("unknown") @map("expiry_source")
+  expiryRevision  Int       @default(1) @map("expiry_revision")
+  expiryConfirmedAt DateTime? @map("expiry_confirmed_at") @db.Timestamptz(6)
   imageUrl        String?   @map("image_url")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -70,6 +76,7 @@ model Item {
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   notificationLogs NotificationLog[]
   shoppingList     ShoppingList[]
+  deliveries       NotificationDelivery[]
 
   @@index([userId, expiryDate])
   @@index([userId, category])
@@ -133,8 +140,49 @@ model Barcodecatalog {
   imageUrl       String?   @map("image_url")
   source         String    @default("api")
   confirmedCount Int       @default(0) @map("confirmed_count")
+  confirmations BarcodeConfirmation[]
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@map("barcode_catalog")
+}
+
+// Service-only operational tables. RLS/grants/functions are managed by SQL.
+model NotificationDelivery {
+  key String @id
+  userId String @map("user_id")
+  itemId String? @map("item_id") @db.Uuid
+  item Item? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  channel String
+  payload Json
+  status String @default("pending")
+  attempts Int @default(0)
+  leaseToken String? @map("lease_token") @db.Uuid
+  leaseUntil DateTime? @map("lease_until") @db.Timestamptz(6)
+  firstAttemptAt DateTime? @map("first_attempt_at") @db.Timestamptz(6)
+  sentAt DateTime? @map("sent_at") @db.Timestamptz(6)
+  lastError String? @map("last_error")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@index([channel,status,createdAt])
+  @@map("notification_deliveries")
+}
+model BarcodeConfirmation {
+  catalog Barcodecatalog @relation(fields: [barcode], references: [barcode], onDelete: Cascade)
+  barcode String
+  userId String @map("user_id")
+  @@id([barcode,userId])
+  @@map("barcode_confirmations")
+}
+model RequestQuota {
+  key String @id
+  hits Int
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  @@index([expiresAt])
+  @@map("request_quotas")
+}
+model DeletedAccount {
+  userId String @id @map("user_id")
+  deletedAt DateTime @default(now()) @map("deleted_at") @db.Timestamptz(6)
+  cleanedAt DateTime? @map("cleaned_at") @db.Timestamptz(6)
+  @@map("deleted_accounts")
 }
