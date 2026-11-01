@@ -29,8 +29,8 @@ export function repairDateDigits(text: string): string {
   );
 }
 
-const EXPIRY_LABELS = String.raw`(?:EXP(?:IRY|IRES|IRATION)?|BEST\s*BEFORE|USE\s*(?:BY|BEFORE)|BBE?)`;
-const MFG_LABELS = String.raw`(?:MFG|MFD|PKD|PACK(?:ED)?(?:\s*ON)?|MANUF(?:ACTURED)?(?:\s*ON)?)`;
+const EXPIRY_LABELS = String.raw`(?:EXP(?:IRY|IRES?|IRATION)?|BEST\s*(?:BEFORE|BY)|USE[\s-]*(?:BY|BEFORE)|CONSUME\s*(?:BY|BEFORE)|VALID\s*(?:UNTIL|TILL|UPTO|UP\s*TO)|BBD?E?)`;
+const MFG_LABELS = String.raw`(?:MFG|MFD|PKD|PKG|DOM|PACK(?:ED|ING)?(?:\s*ON)?|MANUF(?:ACTUR(?:E|ED|ING))?(?:\s*ON)?)`;
 
 /** Pull every plausible date out of OCR text, tolerant of /, -, . and spaces. */
 function findDates(text: string): Found[] {
@@ -51,7 +51,7 @@ function findDates(text: string): Found[] {
       push(convert(m), start);
     }
   }
-  collect(/(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)/g,
+  collect(/(?<!\d)(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})(?!\d)/g,
     (m) => iso(+m[1], +m[2], +m[3]));
   collect(/(?<!\d)(\d{1,2})[\/\-. ](\d{1,2})[\/\-. ](\d{4}|\d{2})(?!\d)/g,
     (m) => iso(normYear(+m[3]), +m[2], +m[1]));
@@ -64,6 +64,21 @@ function findDates(text: string): Found[] {
   collect(/(?<!\d)(\d{1,2})[\/\-. ](\d{4})(?!\d)/g, (m) => {
     const mo = +m[1], y = +m[2];
     return iso(y, mo, lastDayOfMonth(y, mo));
+  });
+  // US-style "JUN 15, 2027" / "JUN 15 27".
+  collect(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?[\s/.-]*(\d{1,2})(?:ST|ND|RD|TH)?[\s,/.-]+(\d{4}|\d{2})\b/gi,
+    (m) => iso(normYear(+m[3]), MONTHS[m[1].toUpperCase()], +m[2]));
+  // Compact labelled dates: EXP 15062027 (DDMMYYYY) or EXP 20270615 (YYYYMMDD).
+  collect(new RegExp(String.raw`(?<=(?:${EXPIRY_LABELS}|${MFG_LABELS})\.?\W{0,4})(\d{8})(?!\d)`, "gi"), (m) => {
+    const v = m[1];
+    return v.startsWith("20") && +v.slice(4, 6) <= 12
+      ? iso(+v.slice(0, 4), +v.slice(4, 6), +v.slice(6, 8))
+      : iso(+v.slice(4, 8), +v.slice(2, 4), +v.slice(0, 2));
+  });
+  // Labelled year-month: EXP 2027-06 / 2027/06.
+  collect(new RegExp(String.raw`(?<=(?:${EXPIRY_LABELS}|${MFG_LABELS})\.?\W{0,4})(20\d{2})[\/\-.](\d{1,2})(?![\d\/\-.])`, "gi"), (m) => {
+    const mo = +m[2], y = +m[1];
+    return mo >= 1 && mo <= 12 ? iso(y, mo, lastDayOfMonth(y, mo)) : null;
   });
   collect(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?\s*[,\/-]?\s*(\d{4})/gi,
     (m) => {
@@ -91,6 +106,48 @@ function guessCategory(text: string): Category | null {
   return null;
 }
 
+function addPeriod(isoDate: string, amount: number, unit: string): string | null {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const u = unit.toUpperCase();
+  if (u.startsWith("DAY")) return iso(...ymd(new Date(Date.UTC(y, m - 1, d + amount))));
+  if (u.startsWith("WEEK")) return iso(...ymd(new Date(Date.UTC(y, m - 1, d + amount * 7))));
+  const months = u.startsWith("YEAR") ? amount * 12 : amount;
+  const total = m - 1 + months;
+  const ty = y + Math.floor(total / 12), tm = (total % 12 + 12) % 12 + 1;
+  return iso(ty, tm, Math.min(d, lastDayOfMonth(ty, tm)));
+}
+function ymd(date: Date): [number, number, number] {
+  return [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()];
+}
+
+/**
+ * "Best before 6 months from the date of manufacture" is only usable with a printed
+ * manufacture date; without one the expiry stays unknown rather than guessed.
+ */
+function relativeExpiry(text: string, manufacture: string | null): string | null {
+  if (!manufacture) return null;
+  const m = new RegExp(
+    String.raw`\b(?:${EXPIRY_LABELS}|USE\s*WITHIN|CONSUME\s*WITHIN|SHELF\s*LIFE(?:\s*IS)?|VALID\s*FOR)\W{0,12}(?:WITHIN\s*)?(\d{1,2})\s*(DAYS?|WEEKS?|MONTHS?|YEARS?)\s*(?:FROM|OF|AFTER)\b`,
+    "i"
+  ).exec(text.replace(/\s+/g, " "));
+  if (!m) return null;
+  const amount = +m[1];
+  if (!amount || amount > 60) return null;
+  return addPeriod(manufacture, amount, m[2]);
+}
+
+/** Lines that describe the pack, not the product, are never a usable name. */
+const NAME_NOISE = /(\bEXP|MFG|MFD|PKD|BEST\s*(?:BEFORE|BY)|BATCH|LOT\b|MRP|PRICE|\bBB\b|\d{2}[\/\-.]\d{2}|INGREDIENT|NUTRI|STORE\b|STORAGE|KEEP\b|NET\s*(?:WT|QTY|CONTENT)|FSSAI|LIC\.?\s*NO|MARKETED|MANUFACTURED|CUSTOMER\s*CARE|WWW|\.COM|@|ADDRESS|INCLUSIVE|TAXES|DIRECTIONS|WARNING)/i;
+
+function pickName(lines: string[]): string | null {
+  const clean = (l: string) => l.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9)%.]+$/g, "").replace(/\s{2,}/g, " ");
+  const scored = lines
+    .map(clean)
+    .filter((l) => l.length >= 4 && l.length <= 60 && /[A-Za-z]{3,}/.test(l) && !NAME_NOISE.test(l))
+    .filter((l) => (l.match(/[A-Za-z]/g)?.length ?? 0) / l.length >= 0.6);
+  return scored[0] ?? null;
+}
+
 /** Pure-offline parse of OCR text into structured fields (no AI). */
 export function parseOcrText(rawText: string, _today: string): Extraction {
   const text = repairDateDigits(rawText);
@@ -103,17 +160,10 @@ export function parseOcrText(rawText: string, _today: string): Extraction {
     .sort((a, b) => (a.iso < b.iso ? -1 : 1));
 
   // Never assume an unlabelled or manufacture date is an expiry.
-  const expiry: string | null = exps[0]?.iso ?? null;
   const manufacture = mfgs[0]?.iso ?? null;
+  const expiry: string | null = exps[0]?.iso ?? relativeExpiry(text, manufacture);
 
-  const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
-  const name =
-    lines.find(
-      (l) =>
-        /[A-Za-z]{3,}/.test(l) &&
-        l.length <= 60 &&
-        !/(EXP|MFG|MFD|BEST|BATCH|MRP|PRICE|\bBB\b|\d{2}[\/\-.]\d{2})/i.test(l)
-    ) ?? null;
+  const name = pickName(text.split(/\n+/).map((l) => l.trim()).filter(Boolean));
 
   const candidate = {
     product_name: name,
@@ -127,3 +177,13 @@ export function parseOcrText(rawText: string, _today: string): Extraction {
     : { product_name: name, expiry_date: null, manufacture_date: null, category: null };
 }
 
+/**
+ * Deterministically read a date the model transcribed verbatim ("15/06/2027", "JUN 27").
+ * Used to cross-check model-converted ISO dates, since DD/MM vs MM/DD swaps are its common error.
+ */
+export function parseDateText(text: string, kind: "exp" | "mfg"): string | null {
+  const clean = text.trim();
+  if (!clean || clean.length > 60) return null;
+  const parsed = parseOcrText(`${kind === "exp" ? "EXP" : "MFG"} ${clean}`, "");
+  return (kind === "exp" ? parsed.expiry_date : parsed.manufacture_date) ?? null;
+}

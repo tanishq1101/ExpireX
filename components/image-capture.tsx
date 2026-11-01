@@ -68,7 +68,7 @@ export function ImageCapture({
       streamRef.current?.getTracks().forEach((t) => t.stop());
       // Ask for a sharp stream: the browser default is often 640x480, too soft to read printed dates.
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 2560 }, height: { ideal: 1440 } },
         audio: false,
       });
       if (request !== cameraRequest.current) {
@@ -120,7 +120,7 @@ export function ImageCapture({
         stopCamera();
       },
       "image/jpeg",
-      0.9
+      0.92
     );
   }
 

@@ -11,6 +11,7 @@ import {
   type ShelfLife,
 } from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
+import { parseOcrText } from "@/lib/ocr-parser";
 
 const MODEL = "gemini-2.5-flash"; // multimodal; reads the label image and extracts in one call
 const IMAGE_TIMEOUT_MS = 18_000; // route allows 60s; leaves room for the offline fallback after a timeout
@@ -21,6 +22,8 @@ const RULES = `Return ONLY JSON with exactly these keys:
 - "brand": string | null          (maker/brand if printed)
 - "expiry_date": string | null    (ISO "YYYY-MM-DD"; the EXPIRY/USE-BY/BEST-BEFORE date, NOT manufacture)
 - "manufacture_date": string | null (ISO "YYYY-MM-DD"; MFG/MFD/PKD/"packed on" if present)
+- "expiry_text": string | null     (the expiry date EXACTLY as printed, character for character, e.g. "15/06/27" or "JUN 2027" — copy it, do not reformat)
+- "manufacture_text": string | null (the manufacture date EXACTLY as printed)
 - "category": one of [${CATEGORIES.join(", ")}] | null
 - "quantity": number | null       (net amount as a number, e.g. 500 for "500 g", 1 for "1 L")
 - "unit": string | null           (the unit only, e.g. "g", "ml", "L", "kg", "tablets", "pcs")
@@ -43,6 +46,9 @@ CRITICAL — judge by the CONTENT, not the container or packaging:
 
 Rules:
 - Read EVERYTHING printed. Works for food, medicines, cosmetics/makeup/creams/powders, and packaged goods.
+- The photo may be rotated, upside-down, tilted, curved around a bottle, glary, or blurry. Mentally rotate it and read text in any orientation. Check every face of the pack that is visible, including side panels, flaps, crimps, caps and the base.
+- Faint dot-matrix / ink-jet stamps (often a few mm tall, grey or black on foil, plastic or glass) are the most common place for the real expiry date. Look for them specifically before concluding no date exists.
+- Transcribe digits carefully: tell 0 from O and 8, 1 from 7 and I, 5 from S, 6 from G, 2 from Z. If two readings are plausible for a digit, choose the one that makes a valid date.
 - Dates on Indian packaging are usually DD/MM/YYYY. If only MM/YYYY or MM/YY (e.g. "06/27", "JUN 2027"), use the LAST day of that month.
 - Prefer "best before"/"exp"/"use by"/"use before" for expiry; "mfg"/"mfd"/"pkd"/"packed on" for manufacture.
 - If the label states a shelf life relative to manufacture (e.g. "Best before 6 months from the date of manufacture", "Use within 24 months of MFG") AND a manufacture/packing date is printed, set expiry_date = that manufacture date + that period and estimated = false. If no manufacture date is printed, leave expiry_date null.
@@ -68,6 +74,8 @@ function model() {
       temperature: 0,
       maxOutputTokens: 8192,
       thinkingConfig: { thinkingBudget: 0 },
+      // Printed dates are tiny; spend more image tokens so they survive downscaling.
+      mediaResolution: "MEDIA_RESOLUTION_HIGH",
     } as Record<string, unknown>,
   });
 }
@@ -152,6 +160,8 @@ function sanitizeExtraction(raw: Record<string, unknown>): Record<string, unknow
     brand: nullishStr(raw.brand, 80) ?? null,
     expiry_date: asIsoDate(raw.expiry_date) ?? null,
     manufacture_date: asIsoDate(raw.manufacture_date) ?? null,
+    expiry_text: nullishStr(raw.expiry_text, 60) ?? null,
+    manufacture_text: nullishStr(raw.manufacture_text, 60) ?? null,
     category: typeof raw.category === "string" ? raw.category : null,
     quantity: asNonNegNumber(raw.quantity) ?? null,
     unit: nullishStr(raw.unit, 40) ?? null,
@@ -225,6 +235,8 @@ function parse(raw: string): Extraction {
   pick("brand", extractionSchema.shape.brand);
   pick("expiry_date", extractionSchema.shape.expiry_date);
   pick("manufacture_date", extractionSchema.shape.manufacture_date);
+  pick("expiry_text", extractionSchema.shape.expiry_text);
+  pick("manufacture_text", extractionSchema.shape.manufacture_text);
   pick("category", extractionSchema.shape.category);
   pick("quantity", extractionSchema.shape.quantity);
   pick("unit", extractionSchema.shape.unit);
@@ -288,6 +300,57 @@ ${RULES}`;
     ], { timeout: IMAGE_TIMEOUT_MS })
   );
   return parse(result.response.text());
+}
+
+/**
+ * Second look for a missing date. The model only transcribes what is printed next to a keyword
+ * (no date maths, no guessing); the deterministic parser then converts it. Unlabelled dates
+ * are ignored on purpose: a batch or packing stamp must never become an expiry.
+ */
+export async function geminiFindDates(
+  imageBase64: string,
+  mimeType: string,
+  today: string,
+  timeoutMs = 12_000
+): Promise<Pick<Extraction, "expiry_date" | "manufacture_date" | "expiry_text" | "manufacture_text">> {
+  const prompt = `Today's date is ${today}. This is a photo of a product pack. Find every printed date or shelf-life statement on it.
+Look on ALL visible faces, including side panels, crimped seams, caps, shoulders and the base, and in any orientation (rotated, upside-down, curved). Faint dot-matrix / ink-jet stamps are the usual place for an expiry date.
+Copy each one EXACTLY as printed, character for character. Do not reformat or convert dates.
+
+Return ONLY JSON: { "dates": [ { "label": string, "text": string } ], "shelf_life": string | null }
+- "label": the keyword printed next to that date, copied as printed (e.g. "EXP", "BEST BEFORE", "USE BY", "MFG", "PKD", "MFD"). Use "" if no keyword is printed with it.
+- "text": the date characters, e.g. "15/06/2027", "JUN 2027", "06/27".
+- "shelf_life": a printed relative statement such as "Best before 6 months from date of manufacture", else null.
+Ignore batch/lot numbers, prices, MRP, barcodes and phone numbers. If there is no date at all, return { "dates": [], "shelf_life": null }.`;
+  const none = { expiry_date: null, manufacture_date: null, expiry_text: null, manufacture_text: null };
+  const result = await model().generateContent(
+    [{ text: prompt }, { inlineData: { data: imageBase64, mimeType } }],
+    { timeout: timeoutMs }
+  );
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.response.text());
+  } catch {
+    return none;
+  }
+  const raw = parsed as { dates?: unknown; shelf_life?: unknown };
+  const entries = (Array.isArray(raw.dates) ? raw.dates : [])
+    .filter((d): d is { label: string; text: string } =>
+      !!d && typeof d === "object" && typeof (d as { label?: unknown }).label === "string" && typeof (d as { text?: unknown }).text === "string")
+    .filter((d) => d.label.trim() && d.text.trim())
+    .slice(0, 12);
+  const shelfLife = typeof raw.shelf_life === "string" ? raw.shelf_life.slice(0, 160) : "";
+  const synthetic = [...entries.map((d) => `${d.label.slice(0, 30)} ${d.text.slice(0, 40)}`), shelfLife].join("\n");
+  const found = parseOcrText(synthetic, today);
+  // Echo back the printed text of the entry that produced each date, for later cross-checking.
+  const textFor = (field: "expiry_date" | "manufacture_date") =>
+    found[field] ? entries.find((d) => parseOcrText(`${d.label} ${d.text}`, today)[field] === found[field])?.text ?? null : null;
+  return {
+    expiry_date: found.expiry_date,
+    manufacture_date: found.manufacture_date ?? null,
+    expiry_text: textFor("expiry_date"),
+    manufacture_text: textFor("manufacture_date"),
+  };
 }
 
 /**

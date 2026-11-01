@@ -49,6 +49,10 @@ export const extractionSchema = z.object({
   brand: z.string().nullable().optional(),
   expiry_date: dateString.nullable(),
   manufacture_date: dateString.nullable().optional(),
+  // The date exactly as printed ("15/06/27"). Lets the server re-read it deterministically
+  // and catch day/month swaps in the model's ISO conversion.
+  expiry_text: z.string().max(60).nullable().optional(),
+  manufacture_text: z.string().max(60).nullable().optional(),
   category: categorySchema.nullable(),
   quantity: z.number().nonnegative().nullable().optional(),
   unit: z.string().max(40).nullable().optional(),
