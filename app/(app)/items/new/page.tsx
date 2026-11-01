@@ -16,5 +16,5 @@ export default async function NewItemPage({ searchParams }: { searchParams: Prom
     if (!data) notFound();
     initial = anotherBatch(data as Item);
   }
-  return <div className="space-y-5"><div><h1 className="text-xl font-semibold">{initial ? 'Add another batch' : 'Add item'}</h1><p className="text-sm text-muted">{initial ? 'Enter the expiry printed on this batch. Previous dates have been cleared.' : 'Scan a barcode, a label, a receipt — or type it in.'}</p></div><div className="glass p-5">{initial ? <ItemForm mode="create" initial={initial} /> : <ScanHub />}</div></div>;
+  return <div className="space-y-5"><div><h1 className="text-xl font-semibold">{initial ? 'Add another batch' : 'Add item'}</h1><p className="text-sm text-muted">{initial ? 'Enter the expiry printed on this batch. Previous dates have been cleared.' : 'Pick the quickest way to add it.'}</p></div><div className="glass p-5">{initial ? <ItemForm mode="create" initial={initial} /> : <ScanHub />}</div></div>;
 }

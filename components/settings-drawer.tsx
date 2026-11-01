@@ -4,7 +4,7 @@ import { usePush } from "@/lib/use-push";
 import * as React from "react";
 import Link from "next/link";
 import {
-  MoreVertical,
+  Menu,
   X,
   Settings,
   Moon,
@@ -143,7 +143,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
   const [open, setOpen] = React.useState(false);
   const [closing, setClosing] = React.useState(false);
   const [panel, setPanel] = React.useState<"main" | "settings">("main");
-  const [modesOpen, setModesOpen] = React.useState(false);
+  const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [compact, setCompact] = React.useState(false);
 
   /* General Settings state */
@@ -261,15 +261,15 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
       {/* 3-dot trigger */}
       <button
         type="button"
-        aria-label="Open settings menu"
+        aria-label="Open menu"
         onClick={() => setOpen(true)}
         className={cn(
-          "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border",
+          "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border",
           "bg-surface/[0.05] text-foreground transition hover:bg-surface/[0.12]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         )}
       >
-        <MoreVertical className="h-[1.1rem] w-[1.1rem]" />
+        <Menu className="h-5 w-5" />
       </button>
 
       {open && (
@@ -298,7 +298,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
           >
             {/* ── Header ── */}
             <div
-              className="flex items-center justify-between border-b px-5 py-4"
+              className="flex items-center justify-between border-b px-5 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]"
               style={{ borderColor: "var(--glass-border)" }}
             >
               {panel === "main" ? (
@@ -324,7 +324,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                 type="button"
                 aria-label="Close menu"
                 onClick={handleClose}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition hover:bg-surface/[0.08] hover:text-foreground"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted transition hover:bg-surface/[0.08] hover:text-foreground"
               >
                 <X className="h-4.5 w-4.5" />
               </button>
@@ -342,7 +342,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                   <button
                     type="button"
                     onClick={() => setPanel("settings")}
-                    className="w-full"
+                    className="w-full text-left"
                   >
                     <DrawerRow icon={Settings} label="General Settings" chevron>
                       <span className="text-[11px] text-muted">App preferences</span>
@@ -378,36 +378,20 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                     />
                   )}
 
-                  {/* Additional Modes */}
-                  <button
-                    type="button"
-                    onClick={() => setModesOpen((v) => !v)}
-                    className="w-full"
+                  {/* Compact view */}
+                  <DrawerRow
+                    icon={Sliders}
+                    label="Compact View"
+                    trailing={
+                      <ToggleSwitch
+                        checked={compact}
+                        onChange={toggleCompact}
+                        label="Toggle compact view"
+                      />
+                    }
                   >
-                    <DrawerRow
-                      icon={Sliders}
-                      label="Additional Modes"
-                      chevron
-                      chevronOpen={modesOpen}
-                    />
-                  </button>
-                  {modesOpen && (
-                    <div className="mb-1 pl-3 pr-1">
-                      <DrawerRow
-                        icon={Sliders}
-                        label="Compact View"
-                        trailing={
-                          <ToggleSwitch
-                            checked={compact}
-                            onChange={toggleCompact}
-                            label="Toggle compact view"
-                          />
-                        }
-                      >
-                        <span className="text-[11px] text-muted">Smaller item rows</span>
-                      </DrawerRow>
-                    </div>
-                  )}
+                    <span className="text-[11px] text-muted">Smaller item rows</span>
+                  </DrawerRow>
 
                   <Divider />
 
@@ -457,7 +441,17 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                     </Select>
                   </div>
 
-                  {/* Scan / OCR engine */}
+                  {/* Advanced: most people never need to change how labels are read. */}
+                  <button
+                    type="button"
+                    aria-expanded={advancedOpen}
+                    onClick={() => setAdvancedOpen((v) => !v)}
+                    className="mb-1 flex min-h-11 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-medium text-muted transition hover:bg-surface/[0.06]"
+                  >
+                    Advanced
+                    <ChevronRight className={cn("h-4 w-4 text-muted/60 transition-transform", advancedOpen && "rotate-90")} />
+                  </button>
+                  {advancedOpen && (
                   <div className="mb-1 rounded-xl px-3 py-3">
                     <div className="mb-2 flex items-center gap-3">
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface/[0.06] text-primary">
@@ -479,6 +473,7 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                       <option value="tesseract">Tesseract OCR (server)</option>
                     </Select>
                   </div>
+                  )}
 
                   {/* Email reminders */}
                   <DrawerRow

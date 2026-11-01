@@ -11,7 +11,7 @@ const variants: Record<Variant, string> = {
   danger: "bg-danger/15 text-danger border border-danger/40 hover:bg-danger/25",
 };
 const sizes: Record<Size, string> = {
-  sm: "h-8 px-3 text-xs",
+  sm: "h-11 px-3 text-sm",
   md: "h-11 px-4 text-sm",
   icon: "h-11 w-11",
 };

@@ -41,12 +41,12 @@ export function ReceiptScan() {
   const [saving, setSaving] = useState(false);
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
 
-  async function process() {
-    if (!file) return;
+  async function process(target: File) {
+    if (processing) return;
     setProcessing(true);
     try {
       const body = new FormData();
-      body.append("file", file);
+      body.append("file", target);
       const json = await fetchJson<ReceiptExtraction>("/api/receipt", {
         method: "POST",
         body,
@@ -193,23 +193,28 @@ export function ReceiptScan() {
     <div className="space-y-4">
       <ImageCapture
         disabled={processing}
-        onPick={setFile}
+        onPick={(picked) => {
+          setFile(picked);
+          // Reading starts right after the photo is taken or chosen.
+          void process(picked);
+        }}
         onClear={() => setFile(null)}
-        hint="Snap or upload a shopping receipt — we’ll extract products for you to review. Check for missed rows."
+        hint="Lay the receipt flat and fit it in the frame. We’ll list the products for you to review — check for missed rows."
       />
       {file && (
-        <Button className="w-full" onClick={process} disabled={processing}>
+        <Button className="w-full" onClick={() => process(file)} disabled={processing}>
           {processing ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" /> Reading receipt…
             </>
           ) : (
             <>
-              <ReceiptText className="h-4 w-4" /> Extract items
+              <ReceiptText className="h-4 w-4" /> Read receipt again
             </>
           )}
         </Button>
       )}
+      {processing && <p role="status" className="text-center text-sm text-muted">This usually takes a few seconds. Keep this screen open.</p>}
     </div>
   );
 }

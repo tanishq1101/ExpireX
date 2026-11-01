@@ -32,6 +32,7 @@ export function FilterBar({ locations = [] }: { locations?: string[] }) {
         </Select>
         <Select name="status" defaultValue={filters.status ?? ""} onChange={(e) => e.currentTarget.form?.requestSubmit()} aria-label="Filter by status">
           <option value="">All statuses</option>
+          <option value="urgent">Needs attention</option>
           <option value="today">Due today</option>
           <option value="week">Next 7 days</option>
           <option value="expiring">Expiring soon</option>
@@ -48,7 +49,7 @@ export function FilterBar({ locations = [] }: { locations?: string[] }) {
           </Select>
         )}
       </div>
-      {hasFilters && <Link href={pathname} className="inline-flex min-h-9 items-center text-sm text-primary hover:underline">Clear filters</Link>}
+      {hasFilters && <Link href={pathname} className="inline-flex min-h-11 items-center text-sm text-primary hover:underline">Clear filters</Link>}
     </form>
   );
 }

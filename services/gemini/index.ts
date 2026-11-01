@@ -13,6 +13,8 @@ import {
 import { CATEGORIES } from "@/lib/status";
 
 const MODEL = "gemini-2.5-flash"; // multimodal; reads the label image and extracts in one call
+const IMAGE_TIMEOUT_MS = 18_000; // route allows 60s; leaves room for the offline fallback after a timeout
+const TEXT_TIMEOUT_MS = 12_000;
 
 const RULES = `Return ONLY JSON with exactly these keys:
 - "product_name": string | null   (concise product name, no marketing fluff)
@@ -41,8 +43,11 @@ CRITICAL — judge by the CONTENT, not the container or packaging:
 
 Rules:
 - Read EVERYTHING printed. Works for food, medicines, cosmetics/makeup/creams/powders, and packaged goods.
-- Dates on Indian packaging are usually DD/MM/YYYY. If only MM/YYYY, use the LAST day of that month.
+- Dates on Indian packaging are usually DD/MM/YYYY. If only MM/YYYY or MM/YY (e.g. "06/27", "JUN 2027"), use the LAST day of that month.
 - Prefer "best before"/"exp"/"use by"/"use before" for expiry; "mfg"/"mfd"/"pkd"/"packed on" for manufacture.
+- If the label states a shelf life relative to manufacture (e.g. "Best before 6 months from the date of manufacture", "Use within 24 months of MFG") AND a manufacture/packing date is printed, set expiry_date = that manufacture date + that period and estimated = false. If no manufacture date is printed, leave expiry_date null.
+- Dates contain digits only: read "O" as 0 and "I"/"l" as 1 inside a date. Ink-jet dates are often small, on the base, cap or crimp — look for them.
+- Ignore batch/lot numbers, MRP and prices, and barcode digits: they are never dates.
 - Medicines: read the printed "EXP" date; set category to "medicine". NEVER estimate a medicine expiry. If no printed expiry is legible, return null expiry_date.
 - Cosmetics/makeup/skincare: set category to "cosmetics". If only a Period-After-Opening symbol ("12M", "24M") is shown and there is no printed expiry, leave expiry_date null.
 - For fresh unpackaged items without a printed date, leave expiry_date, freshness and freshness_note null. A photo cannot establish a safe expiry. Do not estimate dates during label extraction.
@@ -56,7 +61,14 @@ function model() {
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");
   return new GoogleGenerativeAI(apiKey).getGenerativeModel({
     model: MODEL,
-    generationConfig: { responseMimeType: "application/json", temperature: 0, maxOutputTokens: 8192 },
+    // Reading printed text needs no deliberation; skipping "thinking" roughly halves latency, which
+    // keeps slow mobile scans from timing out into the weaker offline OCR fallback.
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0,
+      maxOutputTokens: 8192,
+      thinkingConfig: { thinkingBudget: 0 },
+    } as Record<string, unknown>,
   });
 }
 
@@ -273,7 +285,7 @@ ${RULES}`;
     model().generateContent([
       { text: prompt },
       { inlineData: { data: imageBase64, mimeType } },
-    ], { timeout: 10000 })
+    ], { timeout: IMAGE_TIMEOUT_MS })
   );
   return parse(result.response.text());
 }
@@ -309,7 +321,7 @@ Rules:
 - For documents/warranty/subscription where a shelf life is meaningless, return null expiry/confidence.
 - Tips: at most TWO items. Genuinely useful (e.g. "Refrigerate after opening", "Best consumed within 48h").
 - Never return a date before the base date. Be realistic, not optimistic.`;
-  const result = await withRetry(() => model().generateContent(prompt, { timeout: 10000 }));
+  const result = await withRetry(() => model().generateContent(prompt, { timeout: TEXT_TIMEOUT_MS }));
   return parseShelfLife(result.response.text());
 }
 
@@ -337,7 +349,7 @@ Rules:
     model().generateContent([
       { text: prompt },
       { inlineData: { data: imageBase64, mimeType } },
-    ], { timeout: 10000 })
+    ], { timeout: IMAGE_TIMEOUT_MS })
   );
   return parseReceiptExtraction(result.response.text());
 }
@@ -352,6 +364,6 @@ OCR TEXT:
 """
 ${rawText.slice(0, 4000)}
 """`;
-  const result = await withRetry(() => model().generateContent(prompt, { timeout: 10000 }));
+  const result = await withRetry(() => model().generateContent(prompt, { timeout: TEXT_TIMEOUT_MS }));
   return parse(result.response.text());
 }

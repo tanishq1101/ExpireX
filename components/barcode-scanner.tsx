@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import type { DecodeHintType as ZxingHint } from "@zxing/library";
 import { Loader2, ScanBarcode, X, Keyboard, SwitchCamera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,18 +132,53 @@ export function BarcodeScanner({
     }
 
     async function startZxing() {
-      const { BrowserMultiFormatReader } = await import("@zxing/browser");
+      // iPhone Safari has no native BarcodeDetector, so this path needs to be sharp and fast:
+      // HD rear camera, only the formats products actually use, and frequent decode attempts.
+      const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([
+        import("@zxing/browser"),
+        import("@zxing/library"),
+      ]);
       if (cancelled) return;
-      const reader = new BrowserMultiFormatReader();
-      const controls = await reader.decodeFromVideoDevice(
-        undefined,
+      const hints = new Map<ZxingHint, unknown>([
+        [
+          DecodeHintType.POSSIBLE_FORMATS,
+          [
+            BarcodeFormat.EAN_13,
+            BarcodeFormat.EAN_8,
+            BarcodeFormat.UPC_A,
+            BarcodeFormat.UPC_E,
+            BarcodeFormat.CODE_128,
+            BarcodeFormat.CODE_39,
+            BarcodeFormat.ITF,
+            BarcodeFormat.QR_CODE,
+          ],
+        ],
+        [DecodeHintType.TRY_HARDER, true],
+      ]);
+      const reader = new BrowserMultiFormatReader(hints, {
+        delayBetweenScanAttempts: 100,
+        delayBetweenScanSuccess: 400,
+      });
+      const controls = await reader.decodeFromConstraints(
+        {
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        },
         videoRef.current!,
         (result) => {
           if (result) consider(result.getText());
         }
       );
-      if (cancelled) controls.stop();
-      else zxingControlsRef.current = controls;
+      if (cancelled) {
+        controls.stop();
+        return;
+      }
+      zxingControlsRef.current = controls;
+      // Best-effort continuous autofocus for sharper frames (ignored where unsupported).
+      const track = (videoRef.current?.srcObject as MediaStream | null)?.getVideoTracks()[0];
+      track
+        ?.applyConstraints({ advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet] })
+        .catch(() => {});
     }
 
     async function start() {
@@ -243,7 +279,7 @@ export function BarcodeScanner({
               type="button"
               onClick={flipCamera}
               aria-label="Flip camera"
-              className="absolute right-2 top-8 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70"
+              className="absolute right-2 top-9 inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70"
             >
               <SwitchCamera className="h-4 w-4" />
             </button>
@@ -254,7 +290,7 @@ export function BarcodeScanner({
             </div>
           )}
           <p className="absolute inset-x-0 bottom-2 text-center font-mono text-[11px] uppercase tracking-widest text-white/80">
-            Point at the product barcode
+            Hold the barcode inside the frame
           </p>
         </div>
       )}
@@ -281,8 +317,8 @@ export function BarcodeScanner({
           </Button>
         )}
         {!cameraFailed && (
-          <Button variant="ghost" className="flex-1" onClick={() => setShowManual((m) => !m)}>
-            <Keyboard className="h-4 w-4" /> {showManual ? "Hide manual" : "Enter manually"}
+          <Button variant="outline" className="flex-1" onClick={() => setShowManual((m) => !m)}>
+            <Keyboard className="h-4 w-4" /> {showManual ? "Hide number entry" : "Type the number"}
           </Button>
         )}
       </div>

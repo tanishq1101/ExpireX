@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Camera, ImageUp, Loader2, RotateCcw, X, SwitchCamera } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { fitWithin, MAX_ORIGINAL_BYTES, MAX_UPLOAD_BYTES, prepareImage } from "@/lib/image-resize";
 
 type Facing = "environment" | "user";
 
 /**
  * Reusable camera + upload capture. Calls onPick(file) when an image is ready and
- * onClear() when the user retakes. Parent renders its own primary action below.
+ * onClear() when the user retakes. Photos are shrunk in the browser first, so large
+ * gallery pictures upload quickly and never hit server size limits.
  */
 export function ImageCapture({
   onPick,
@@ -30,6 +32,7 @@ export function ImageCapture({
   const [preview, setPreview] = useState<string | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [facing, setFacing] = useState<Facing>("environment");
 
   function stopCamera() {
@@ -54,7 +57,7 @@ export function ImageCapture({
 
   async function startCamera(facingMode: Facing = facing) {
     if (!navigator.mediaDevices?.getUserMedia) {
-      toast.error("Camera needs a secure (https) connection. Upload a photo instead.");
+      toast.error("Camera needs a secure (https) connection. Choose a photo instead.");
       return;
     }
     if (disabled) return;
@@ -63,13 +66,21 @@ export function ImageCapture({
     setCameraOn(false);
     try {
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      // Ask for a sharp stream: the browser default is often 640x480, too soft to read printed dates.
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode } },
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       });
       if (request !== cameraRequest.current) {
         stream.getTracks().forEach((t) => t.stop());
         return;
+      }
+      try {
+        await stream.getVideoTracks()[0]?.applyConstraints({
+          advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet],
+        });
+      } catch {
+        /* autofocus control is not available everywhere */
       }
       streamRef.current = stream;
       setCameraOn(true);
@@ -78,8 +89,8 @@ export function ImageCapture({
       const name = err instanceof DOMException ? err.name : "";
       if (name === "NotAllowedError")
         toast.error("Camera blocked. Allow camera access in your browser’s settings.");
-      else if (name === "NotFoundError") toast.error("No camera found. Upload a photo instead.");
-      else toast.error("Couldn’t start the camera. Upload a photo instead.");
+      else if (name === "NotFoundError") toast.error("No camera found. Choose a photo instead.");
+      else toast.error("Couldn’t start the camera. Choose a photo instead.");
     } finally {
       if (request === cameraRequest.current) setStarting(false);
     }
@@ -96,9 +107,9 @@ export function ImageCapture({
     if (disabled || !video || !video.videoWidth) return;
     const request = cameraRequest.current;
     const canvas = document.createElement("canvas");
-    const scale = Math.min(1, 2000 / Math.max(video.videoWidth, video.videoHeight));
-    canvas.width = Math.round(video.videoWidth * scale);
-    canvas.height = Math.round(video.videoHeight * scale);
+    const size = fitWithin(video.videoWidth, video.videoHeight);
+    canvas.width = size.width;
+    canvas.height = size.height;
     canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
     canvas.toBlob(
       (blob) => {
@@ -113,18 +124,25 @@ export function ImageCapture({
     );
   }
 
-  function pickFile(f: File | null) {
+  async function pickFile(f: File | null) {
     if (!f || disabled) return;
     if (!f.type.startsWith("image/")) {
       toast.error("Please choose an image.");
       return;
     }
-    if (f.size > 8 * 1024 * 1024) {
-      toast.error("This photo is too large. Choose one smaller than 8 MB.");
+    if (f.size > MAX_ORIGINAL_BYTES) {
+      toast.error("This photo is too large. Choose one smaller than 25 MB.");
       return;
     }
-    setPreview(URL.createObjectURL(f));
-    onPick(f);
+    setPreparing(true);
+    const ready = await prepareImage(f);
+    setPreparing(false);
+    if (ready.size > MAX_UPLOAD_BYTES) {
+      toast.error("This photo is too large to upload. Try a different one.");
+      return;
+    }
+    setPreview(URL.createObjectURL(ready));
+    onPick(ready);
   }
 
   function reset() {
@@ -142,7 +160,7 @@ export function ImageCapture({
         disabled={disabled}
         className="hidden"
         onChange={(e) => {
-          pickFile(e.target.files?.[0] ?? null);
+          void pickFile(e.target.files?.[0] ?? null);
           e.target.value = "";
         }}
       />
@@ -151,7 +169,7 @@ export function ImageCapture({
         <div className="space-y-3">
           <div className="relative overflow-hidden rounded-xl border border-border bg-black">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video ref={videoRef} playsInline muted className="mx-auto max-h-72 w-full object-contain" />
+            <video ref={videoRef} playsInline muted className="mx-auto max-h-[60vh] w-full object-contain" />
             <button
               type="button"
               onClick={flipCamera}
@@ -179,7 +197,7 @@ export function ImageCapture({
           <img
             src={preview}
             alt="Selected"
-            className="mx-auto max-h-72 rounded-xl border border-border object-contain"
+            className="mx-auto max-h-[50vh] rounded-xl border border-border object-contain"
           />
           <Button variant="outline" className="w-full" onClick={reset} disabled={disabled}>
             <RotateCcw className="h-4 w-4" /> Retake
@@ -193,20 +211,20 @@ export function ImageCapture({
             <button
               type="button"
               onClick={() => startCamera()}
-              disabled={starting || disabled}
-              className="glass flex flex-col items-center gap-2 p-8 text-muted transition hover:border-primary/40 disabled:opacity-60"
+              disabled={starting || disabled || preparing}
+              className="glass flex min-h-32 flex-col items-center justify-center gap-2 p-5 text-foreground transition active:scale-[0.98] hover:border-primary/40 disabled:opacity-60"
             >
-              {starting ? <Loader2 className="h-7 w-7 animate-spin" /> : <Camera className="h-7 w-7" />}
-              <span className="text-sm">Use camera</span>
+              {starting ? <Loader2 className="h-7 w-7 animate-spin text-primary" /> : <Camera className="h-7 w-7 text-primary" />}
+              <span className="text-sm font-medium">Open camera</span>
             </button>
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              disabled={starting || disabled}
-              className="glass flex flex-col items-center gap-2 p-8 text-muted transition hover:border-primary/40"
+              disabled={starting || disabled || preparing}
+              className="glass flex min-h-32 flex-col items-center justify-center gap-2 p-5 text-foreground transition active:scale-[0.98] hover:border-primary/40 disabled:opacity-60"
             >
-              <ImageUp className="h-7 w-7" />
-              <span className="text-sm">Upload photo</span>
+              {preparing ? <Loader2 className="h-7 w-7 animate-spin text-primary" /> : <ImageUp className="h-7 w-7 text-primary" />}
+              <span className="text-sm font-medium">{preparing ? "Preparing…" : "Choose photo"}</span>
             </button>
           </div>
           {hint && <p className="text-center text-xs text-muted">{hint}</p>}

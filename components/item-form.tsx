@@ -3,13 +3,14 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Sparkles, Camera, Info, ScanBarcode } from "lucide-react";
+import { Loader2, Sparkles, Camera, Info, ScanBarcode, ChevronDown, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { saveItem } from "@/lib/save-item";
-import { externalImageUrl } from "@/lib/utils";
+import { cn, externalImageUrl } from "@/lib/utils";
+import { MAX_ORIGINAL_BYTES, MAX_UPLOAD_BYTES, prepareImage } from "@/lib/image-resize";
 import { fetchJson } from "@/lib/fetch-json";
-import { addDays } from "@/lib/dates";
+import { addDays, formatDate } from "@/lib/dates";
 import { categorySchema, dateString, itemFormSchema, type Extraction, type ShelfLife } from "@/lib/validators";
 import { CATEGORIES } from "@/lib/status";
 import { CATEGORY_META } from "@/lib/categories";
@@ -42,6 +43,21 @@ export type ItemFormInitial = Partial<
 >;
 
 const UNIT_SUGGESTIONS = ["pcs", "ml", "L", "g", "kg", "pack", "box", "bottle", "strip", "tablets"];
+
+// Maps a validation issue to the input to focus; "more" fields live in the collapsible section.
+const FIELD_IDS: Record<string, { id: string; more?: boolean }> = {
+  name: { id: "name" },
+  category: { id: "category" },
+  expiry_date: { id: "expiry" },
+  expiry_source: { id: "expiry" },
+  quantity: { id: "qty" },
+  unit: { id: "unit" },
+  manufacture_date: { id: "mfg", more: true },
+  opened_date: { id: "opened", more: true },
+  open_within_days: { id: "within", more: true },
+  location: { id: "location", more: true },
+  notes: { id: "notes", more: true },
+};
 
 export function ItemForm({
   mode,
@@ -92,6 +108,10 @@ export function ItemForm({
   const [estimating, setEstimating] = useState(false);
   const [showScan, setShowScan] = useState(false);
   const [estimateNote, setEstimateNote] = useState<string | null>(null);
+  // Rarely used fields stay tucked away, but open by themselves when there is something in them.
+  const [moreOpen, setMoreOpen] = useState(
+    () => !!(initial.manufacture_date || initial.opened_date || initial.open_within_days != null || initial.location || initial.notes)
+  );
 
   async function estimateExpiry() {
     if (!name.trim()) {
@@ -138,6 +158,15 @@ export function ItemForm({
     toast.success(ex.expiry_date ? "Filled from label" : "Label scanned — review the details");
   }
 
+  async function onImageChosen(chosen: File | null) {
+    if (!chosen) return setFile(null);
+    if (!chosen.type.startsWith("image/")) return void toast.error("Please choose an image.");
+    if (chosen.size > MAX_ORIGINAL_BYTES) return void toast.error("This photo is too large. Choose one smaller than 25 MB.");
+    const ready = await prepareImage(chosen);
+    if (ready.size > MAX_UPLOAD_BYTES) return void toast.error("This photo is too large. Try a different one.");
+    setFile(ready);
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting.current) return;
@@ -157,7 +186,13 @@ export function ItemForm({
       open_within_days: openWithin || null,
     });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Please fix the form.");
+      const issue = parsed.error.issues[0];
+      toast.error(issue?.message ?? "Please fix the form.");
+      const target = FIELD_IDS[String(issue?.path[0])];
+      if (target) {
+        if (target.more) setMoreOpen(true);
+        requestAnimationFrame(() => document.getElementById(target.id)?.focus());
+      }
       return;
     }
     if (!userId) {
@@ -202,16 +237,16 @@ export function ItemForm({
   })();
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-5">
       {notice && (
-        <p className="flex items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-accent">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <p className="flex items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 p-3 text-sm text-accent">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{notice}</span>
         </p>
       )}
       {!notice && fromScan && (
-        <p className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-accent">
-          Review the auto-filled details below. Nothing is saved until you press “Save item”.
+        <p className="rounded-xl border border-accent/30 bg-accent/10 p-3 text-sm text-accent">
+          Check the details we filled in. Nothing is saved until you tap “Save item”.
         </p>
       )}
 
@@ -230,68 +265,73 @@ export function ItemForm({
             alt=""
             className="h-14 w-14 rounded-lg border border-border object-cover"
           />
-          <span className="text-xs text-muted">Attached image. Private previews expire after 15 minutes; reload to refresh.</span>
+          <span className="text-xs text-muted">Attached photo. Reload the page if the preview disappears.</span>
         </div>
       )}
 
       <div>
-        <Label htmlFor="name">Name *</Label>
-        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Label htmlFor="name">Name</Label>
+        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="off" enterKeyHint="next" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label htmlFor="category">Category *</Label>
-          <Select
-            id="category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value as Category)}
+      <div>
+        <Label htmlFor="category">Category</Label>
+        <Select id="category" value={category} onChange={(e) => setCategory(e.target.value as Category)}>
+          {CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {CATEGORY_META[c].label}
+            </option>
+          ))}
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="expiry">Expiry date</Label>
+        <Input
+          id="expiry"
+          type="date"
+          value={expiry}
+          onChange={(e) => {
+            setExpiry(e.target.value);
+            setExpirySource("manual");
+            setEstimateNote(null);
+          }}
+          required
+        />
+
+        {/* Where the date came from is recorded automatically; users only see what matters. */}
+        {expirySource === "printed" && expiry && (
+          <p className="flex items-center gap-1.5 text-xs text-success">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Read from the packaging. Double-check it against the pack.
+          </p>
+        )}
+        {expirySource === "estimated" && (
+          <p className="text-sm text-warning">This date is an estimate. Check the packaging before relying on it.</p>
+        )}
+        {expirySource === "unknown" && expiry && (
+          <p className="text-xs text-muted">We don’t know where this date came from. Change it to confirm it.</p>
+        )}
+        {estimateNote && <p className="text-xs text-muted">{estimateNote}</p>}
+        {category === "medicine" && (
+          <p className="text-xs text-muted">For medicine, scan or enter the expiry printed on the packaging.</p>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button type="button" variant="outline" size="sm" onClick={() => setShowScan((v) => !v)}>
+            <Camera className="h-4 w-4" /> {showScan ? "Close scanner" : "Scan date from label"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={estimateExpiry}
+            disabled={estimating || category === "medicine"}
           >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_META[c].label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="expiry">Expiry date *</Label>
-          <Input
-            id="expiry"
-            type="date"
-            value={expiry}
-            onChange={(e) => {
-              setExpiry(e.target.value);
-              setExpirySource("manual");
-              setEstimateNote(null);
-            }}
-            required
-          />
+            {estimating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            Estimate with AI
+          </Button>
         </div>
       </div>
-
-      {/* Smart helpers: AI estimate + scan the printed date */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={estimateExpiry}
-          disabled={estimating || category === "medicine"}
-        >
-          {estimating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-          Estimate expiry with AI
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setShowScan((s) => !s)}>
-          <Camera className="h-3.5 w-3.5" /> {showScan ? "Close scanner" : "Scan date from label"}
-        </Button>
-      </div>
-      <div><Label htmlFor="expiry-source">Date source</Label><Select id="expiry-source" value={expirySource} onChange={(e) => setExpirySource(e.target.value as typeof expirySource)}><option value="manual">Entered manually</option><option value="printed">Read from packaging</option><option value="estimated">Estimated</option><option value="unknown">Unknown (existing item)</option></Select></div>
-      {expirySource === "estimated" && <p className="text-sm text-warning">This date is an estimate. Check the packaging before relying on it.</p>}
-      {estimateNote && <p className="text-xs text-muted">✨ {estimateNote}</p>}
-      {category === "medicine" && (
-        <p className="text-xs text-muted">For medicine, scan or enter the expiry printed on the packaging.</p>
-      )}
 
       {showScan && (
         <div className="rounded-xl border border-border p-3">
@@ -301,100 +341,106 @@ export function ItemForm({
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label htmlFor="mfg">Manufacture date</Label>
-          <Input id="mfg" type="date" value={mfg ?? ""} onChange={(e) => setMfg(e.target.value)} />
+          <Label htmlFor="qty">Quantity</Label>
+          <Input
+            id="qty"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+          />
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label htmlFor="qty">Qty</Label>
-            <Input
-              id="qty"
-              type="number"
-              min="0"
-              step="any"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="unit">Unit</Label>
-            <Input
-              id="unit"
-              list="unit-suggestions"
-              value={unit ?? ""}
-              onChange={(e) => setUnit(e.target.value)}
-              placeholder="pcs, ml"
-            />
-            <datalist id="unit-suggestions">
-              {UNIT_SUGGESTIONS.map((u) => (
-                <option key={u} value={u} />
-              ))}
-            </datalist>
-          </div>
+        <div>
+          <Label htmlFor="unit">Unit</Label>
+          <Input
+            id="unit"
+            list="unit-suggestions"
+            value={unit ?? ""}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="pcs, ml, g"
+            autoComplete="off"
+          />
+          <datalist id="unit-suggestions">
+            {UNIT_SUGGESTIONS.map((u) => (
+              <option key={u} value={u} />
+            ))}
+          </datalist>
         </div>
       </div>
 
+      <div className="space-y-4">
+        <button
+          type="button"
+          aria-expanded={moreOpen}
+          aria-controls="more-details"
+          onClick={() => setMoreOpen((v) => !v)}
+          className="flex min-h-11 w-full items-center justify-between rounded-xl border border-border px-3 text-left text-sm font-medium transition hover:bg-surface/[0.06]"
+        >
+          <span>
+            More details <span className="font-normal text-muted">· optional</span>
+          </span>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted transition-transform", moreOpen && "rotate-180")} />
+        </button>
 
-      {/* Opened tracking — shortens the effective expiry once a product is opened. */}
-      <div className="space-y-3 rounded-xl border border-border p-3">
-        <p className="text-xs font-medium text-muted">
-          Opened? <span className="font-normal">Optional — we’ll use whichever date comes first.</span>
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="opened">Opened on</Label>
-            <Input
-              id="opened"
-              type="date"
-              value={openedDate ?? ""}
-              onChange={(e) => setOpenedDate(e.target.value)}
-            />
+        {moreOpen && (
+          <div id="more-details" className="space-y-4">
+            <div>
+              <Label htmlFor="location">Storage location</Label>
+              <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={60} placeholder="Fridge, pantry, medicine cabinet…" />
+            </div>
+
+            <div>
+              <Label htmlFor="mfg">Manufacture date</Label>
+              <Input id="mfg" type="date" value={mfg ?? ""} onChange={(e) => setMfg(e.target.value)} />
+            </div>
+
+            {/* Opened tracking — shortens the effective expiry once a product is opened. */}
+            <div className="space-y-3 rounded-xl border border-border p-3">
+              <p className="text-sm font-medium">
+                Opened it? <span className="font-normal text-muted">We’ll remind you by whichever date comes first.</span>
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="opened">Opened on</Label>
+                  <Input id="opened" type="date" value={openedDate ?? ""} onChange={(e) => setOpenedDate(e.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="within">Use within (days)</Label>
+                  <Input
+                    id="within"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    value={openWithin}
+                    onChange={(e) => setOpenWithin(e.target.value)}
+                    placeholder="7"
+                  />
+                </div>
+              </div>
+              {effectiveHint && <p className="text-xs text-accent">Use by {formatDate(effectiveHint)} once opened.</p>}
+            </div>
+
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea id="notes" value={notes ?? ""} onChange={(e) => setNotes(e.target.value)} />
+            </div>
+
+            {!fromScan && (
+              <div>
+                <Label htmlFor="image">Photo</Label>
+                <Input id="image" type="file" accept="image/*" onChange={(e) => void onImageChosen(e.target.files?.[0] ?? null)} />
+                {initial.image_url && !file && <p className="mt-1 text-xs text-muted">A photo is already attached.</p>}
+              </div>
+            )}
+            {fromScan && file && <p className="text-xs text-muted">The scanned photo will be saved with this item.</p>}
           </div>
-          <div>
-            <Label htmlFor="within">Use within (days)</Label>
-            <Input
-              id="within"
-              type="number"
-              min="1"
-              value={openWithin}
-              onChange={(e) => setOpenWithin(e.target.value)}
-              placeholder="7"
-            />
-          </div>
-        </div>
-        {effectiveHint && (
-          <p className="text-xs text-accent">⏳ Effective use-by: {effectiveHint}</p>
         )}
       </div>
 
-      <div>
-        <Label htmlFor="location">Storage location</Label>
-        <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={60} placeholder="Fridge, pantry, medicine cabinet…" />
-      </div>
-
-      <div>
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" value={notes ?? ""} onChange={(e) => setNotes(e.target.value)} />
-      </div>
-
-      {!fromScan && (
-        <div>
-          <Label htmlFor="image">Image</Label>
-          <Input
-            id="image"
-            type="file"
-            accept="image/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          {initial.image_url && !file && (
-            <p className="mt-1 text-xs text-muted">An image is already attached.</p>
-          )}
-        </div>
-      )}
-      {fromScan && file && <p className="text-xs text-muted">Scanned image will be attached on save.</p>}
-
       <Button type="submit" className="w-full" disabled={saving}>
-        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save item"}
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "create" ? "Save item" : "Save changes"}
       </Button>
     </form>
   );

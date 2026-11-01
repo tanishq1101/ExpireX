@@ -38,3 +38,24 @@ export const CATEGORIES = [
   "subscription",
   "other",
 ] as const;
+
+/** What the list row shows on its right edge: a short value with a caption underneath. */
+export type Countdown = { value: string; caption: string; status: ItemStatus };
+
+/** Compact, scannable countdown, e.g. "12 / days left", "3d / overdue", "Today". */
+export function countdown(today: string, expiry: string): Countdown {
+  const diff = daysBetween(today, expiry);
+  const status = getStatus(today, expiry);
+  if (diff < 0) {
+    const late = -diff;
+    return late >= 60
+      ? { value: `${Math.floor(late / 30)}mo`, caption: "overdue", status }
+      : { value: `${late}d`, caption: "overdue", status };
+  }
+  if (diff === 0) return { value: "Today", caption: "", status };
+  if (diff === 1) return { value: "Tomorrow", caption: "", status };
+  if (diff < 14) return { value: String(diff), caption: "days left", status };
+  if (diff < 60) return { value: String(Math.round(diff / 7)), caption: "weeks left", status };
+  if (diff < 730) return { value: String(Math.round(diff / 30)), caption: "months left", status };
+  return { value: String(Math.floor(diff / 365)), caption: "years left", status };
+}

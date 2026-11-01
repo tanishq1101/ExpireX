@@ -19,6 +19,19 @@ const normYear = (y: number) => (y < 100 ? 2000 + y : y);
 
 type Found = { iso: string; idx: number };
 
+/**
+ * OCR often reads 0 as O and 1 as I/l inside printed dates ("2O/O5/2O27"). Repair those only
+ * inside tokens that look like a date, so ordinary words are never touched.
+ */
+export function repairDateDigits(text: string): string {
+  return text.replace(/(?<![A-Za-z0-9])[0-9OoIl|]{1,4}(?:[\/\-.][0-9OoIl|]{1,4}){1,2}(?![A-Za-z0-9])/g, (token) =>
+    (token.match(/\d/g)?.length ?? 0) >= 2 ? token.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1") : token
+  );
+}
+
+const EXPIRY_LABELS = String.raw`(?:EXP(?:IRY|IRES|IRATION)?|BEST\s*BEFORE|USE\s*(?:BY|BEFORE)|BBE?)`;
+const MFG_LABELS = String.raw`(?:MFG|MFD|PKD|PACK(?:ED)?(?:\s*ON)?|MANUF(?:ACTURED)?(?:\s*ON)?)`;
+
 /** Pull every plausible date out of OCR text, tolerant of /, -, . and spaces. */
 function findDates(text: string): Found[] {
   const out: Found[] = [];
@@ -42,8 +55,12 @@ function findDates(text: string): Found[] {
     (m) => iso(+m[1], +m[2], +m[3]));
   collect(/(?<!\d)(\d{1,2})[\/\-. ](\d{1,2})[\/\-. ](\d{4}|\d{2})(?!\d)/g,
     (m) => iso(normYear(+m[3]), +m[2], +m[1]));
-  collect(/\b(\d{1,2})[\s/-]+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[\s,/-]+(\d{4}|\d{2})\b/gi,
+  collect(/\b(\d{1,2})[\s/.-]*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[\s,/.-]*(\d{4}|\d{2})\b/gi,
     (m) => iso(normYear(+m[3]), MONTHS[m[2].toUpperCase()], +m[1]));
+  collect(new RegExp(String.raw`(?<=(?:${EXPIRY_LABELS}|${MFG_LABELS})\.?\W{0,4})(\d{1,2})[\/\-.](\d{2})(?![\d\/\-.])`, "gi"), (m) => {
+    const mo = +m[1], y = normYear(+m[2]);
+    return mo >= 1 && mo <= 12 ? iso(y, mo, lastDayOfMonth(y, mo)) : null;
+  });
   collect(/(?<!\d)(\d{1,2})[\/\-. ](\d{4})(?!\d)/g, (m) => {
     const mo = +m[1], y = +m[2];
     return iso(y, mo, lastDayOfMonth(y, mo));
@@ -59,7 +76,7 @@ function findDates(text: string): Found[] {
 /** Classify a date by the keyword nearest before it: expiry vs manufacture. */
 function nearestKind(text: string, idx: number): "exp" | "mfg" | "none" {
   const before = text.slice(Math.max(0, idx - 64), idx).toUpperCase();
-  const labels = [...before.matchAll(/\b(EXP(?:IRY|IRES|IRATION)?|BEST\s*BEFORE|USE\s*(?:BY|BEFORE)|BBE?|MFG|MFD|PKD|PACK(?:ED)?(?:\s*ON)?|MANUF(?:ACTURED)?(?:\s*ON)?)\b/g)];
+  const labels = [...before.matchAll(new RegExp(String.raw`\b(${EXPIRY_LABELS}|${MFG_LABELS})\b`, "g"))];
   const label = labels.at(-1)?.[1];
   if (!label) return "none";
   return /^(MFG|MFD|PKD|PACK|MANUF)/.test(label) ? "mfg" : "exp";
@@ -67,14 +84,16 @@ function nearestKind(text: string, idx: number): "exp" | "mfg" | "none" {
 
 function guessCategory(text: string): Category | null {
   const t = text.toLowerCase();
-  if (/\b(tablet|capsule|syrup|ointment|drops|mg|pharma|medicine|antibiotic)\b/.test(t)) return "medicine";
-  if (/\b(cream|lotion|shampoo|conditioner|serum|spf|sunscreen|cosmetic|lipstick|makeup|powder)\b/.test(t))
+  // "mg" and "powder" also appear on food (nutrition panels, milk powder), so they are not signals.
+  if (/\b(tablets?|capsules?|syrup|ointment|antibiotic|pharma\w*|medicine|dosage|prescription)\b/.test(t)) return "medicine";
+  if (/\b(cream|lotion|shampoo|conditioner|serum|spf|sunscreen|cosmetic|lipstick|makeup|face\s*powder|talc)\b/.test(t))
     return "cosmetics";
   return null;
 }
 
 /** Pure-offline parse of OCR text into structured fields (no AI). */
-export function parseOcrText(text: string, _today: string): Extraction {
+export function parseOcrText(rawText: string, _today: string): Extraction {
+  const text = repairDateDigits(rawText);
   const dates = findDates(text);
   const exps = dates
     .filter((d) => nearestKind(text, d.idx) === "exp")

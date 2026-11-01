@@ -30,3 +30,10 @@ export function relativeLabel(today: string, expiry: string): string {
   if (diff === -1) return "expired yesterday";
   return `expired ${Math.abs(diff)} days ago`;
 }
+
+/** "12 Mar 2027" — fixed locale and UTC, so server and browser always render the same text. */
+export function formatDate(date: string): string {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}

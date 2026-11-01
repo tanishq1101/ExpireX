@@ -14,11 +14,12 @@
 
   --primary: 29 78 216; /* blue-700 (navy) */
   --primary-foreground: 255 255 255;
-  --accent: 2 132 199; /* sky-600 (light blue) */
+  --accent: 3 105 161; /* sky-700: sky-600 was only ~4.1:1 as small text on the light background */
   --accent-foreground: 255 255 255;
 
-  --success: 16 185 129;
-  --warning: 217 119 6;
+  /* Status colours double as text, so the light theme uses deeper shades (>= 4.5:1 on the background). */
+  --success: 4 120 87;
+  --warning: 180 83 9;
   --danger: 220 38 38;
 
   --ring: 37 99 235;
@@ -58,6 +59,19 @@ html,
 body {
   background: rgb(var(--background));
   color: rgb(var(--foreground));
+}
+
+/* Touch polish: no grey tap flash, no double-tap-zoom delay on controls. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+a,
+button,
+summary,
+label,
+select,
+input {
+  touch-action: manipulation;
 }
 
 /* hide the default disclosure triangle on <details><summary> */
@@ -143,6 +157,7 @@ summary::-webkit-details-marker {
   .compact li .glass {
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
+    min-height: 0;
   }
 
   /* Premium hover: lift + navy glow + accent border. Pair with `glass`. */
@@ -150,10 +165,16 @@ summary::-webkit-details-marker {
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease,
       border-color 0.3s ease;
   }
-  .hover-glow:hover {
-    transform: translateY(-4px);
-    border-color: rgb(var(--primary) / 0.5);
-    box-shadow: 0 16px 44px -14px rgb(var(--primary) / 0.5);
+  /* Only on devices that truly hover: on touchscreens :hover sticks after a tap. */
+  @media (hover: hover) {
+    .hover-glow:hover {
+      transform: translateY(-4px);
+      border-color: rgb(var(--primary) / 0.5);
+      box-shadow: 0 16px 44px -14px rgb(var(--primary) / 0.5);
+    }
+  }
+  .hover-glow:active {
+    transform: scale(0.98);
   }
 }
 

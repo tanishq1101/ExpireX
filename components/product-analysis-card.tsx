@@ -1,6 +1,6 @@
 "use client";
 
-import { Info, Zap, ScanLine, ArrowRight, RotateCcw } from "lucide-react";
+import { Info, Zap, ArrowRight, RotateCcw } from "lucide-react";
 import { cn, externalImageUrl } from "@/lib/utils";
 import { daysBetween } from "@/lib/dates";
 import { CATEGORY_META } from "@/lib/categories";
@@ -40,12 +40,12 @@ export function ProductAnalysisCard({
     days == null ? "text-muted" : days < 0 ? "text-danger" : days <= 7 ? "text-warning" : "text-accent";
   const expText =
     days == null
-      ? "SET DATE"
+      ? "ADD EXPIRY DATE"
       : days < 0
-        ? `EXPIRED ${Math.abs(days)}D`
+        ? `EST. EXPIRED ${Math.abs(days)}D AGO`
         : days === 0
-          ? "EXP: TODAY"
-          : `EXP: ${days} DAY${days === 1 ? "" : "S"}`;
+          ? "EST. EXPIRES TODAY"
+          : `EST. EXPIRY: ${days} DAY${days === 1 ? "" : "S"}`;
 
   return (
     <div className="relative">
@@ -91,7 +91,7 @@ export function ProductAnalysisCard({
           )}
           {confidence && !estimating && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-accent">
-              AI MATCH: {CONF_LABEL[confidence]}
+              ESTIMATE · {CONF_LABEL[confidence]}
             </span>
           )}
         </div>
@@ -122,16 +122,16 @@ export function ProductAnalysisCard({
 
         <Button
           onClick={onContinue}
-          className="mt-5 w-full border border-dashed border-accent/50 bg-accent/10 text-foreground hover:bg-accent/20"
+          className="mt-5 w-full"
         >
-          <ScanLine className="h-4 w-4" /> View full analysis <ArrowRight className="h-4 w-4" />
+          Continue <ArrowRight className="h-4 w-4" />
         </Button>
         <button
           type="button"
           onClick={onRescan}
-          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 text-xs text-muted transition hover:text-foreground"
+          className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-1.5 text-sm text-muted transition hover:text-foreground"
         >
-          <RotateCcw className="h-3.5 w-3.5" /> Scan again
+          <RotateCcw className="h-3.5 w-3.5" /> Scan a different product
         </button>
       </div>
     </div>

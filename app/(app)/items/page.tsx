@@ -47,7 +47,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
       {error ? (
         <div role="alert" className="glass space-y-2 p-6 text-center text-sm">
           <p className="text-danger">Couldn’t load items. Your inventory may still contain items.</p>
-          <Link href={pageHref(filters.page)} className="inline-flex min-h-10 items-center text-primary underline">Try again</Link>
+          <Link href={pageHref(filters.page)} className="inline-flex min-h-11 items-center text-primary underline">Try again</Link>
         </div>
       ) : items.length === 0 ? (
         <EmptyState icon={hasFilters ? Search : PackageOpen} title={total > 0 ? "No items on this page" : hasFilters ? "No matching items" : "No items yet"}
@@ -59,9 +59,9 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
       )}
       {!error && pages > 1 && (
         <nav aria-label="Inventory pages" className="flex items-center justify-between gap-3 text-sm">
-          {filters.page > 1 ? <Link href={pageHref(filters.page - 1)} className="inline-flex min-h-10 items-center rounded-xl border border-border px-3">Previous</Link> : <span />}
+          {filters.page > 1 ? <Link href={pageHref(filters.page - 1)} className="inline-flex min-h-11 items-center rounded-xl border border-border px-4">Previous</Link> : <span />}
           <span className="text-muted">Page {filters.page} of {pages}</span>
-          {filters.page < pages ? <Link href={pageHref(filters.page + 1)} className="inline-flex min-h-10 items-center rounded-xl border border-border px-3">Next</Link> : <span />}
+          {filters.page < pages ? <Link href={pageHref(filters.page + 1)} className="inline-flex min-h-11 items-center rounded-xl border border-border px-4">Next</Link> : <span />}
         </nav>
       )}
     </div>

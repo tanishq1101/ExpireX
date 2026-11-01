@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, ScanBarcode, Package } from "lucide-react";
 import { useSupabaseClient } from "@/services/supabase/client";
@@ -27,9 +27,12 @@ export function BarcodeAdd({
   const supabase = useSupabaseClient();
 
   const [busy, setBusy] = useState(false);
+  // Opens straight on the camera — the chooser tile the user just tapped is the only "start" they need.
   const [step, setStep] = useState<
-    "intro" | "scan" | "looking" | "analysis" | "exists" | "ocr" | "rejected"
-  >("intro");
+    "scan" | "looking" | "analysis" | "exists" | "ocr" | "rejected"
+  >("scan");
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const [rejectedName, setRejectedName] = useState<string | null>(null);
   // When the same barcode already exists, hold the new-item data so the user can still add it fresh.
   const [existing, setExisting] = useState<Existing | null>(null);
@@ -99,11 +102,14 @@ export function BarcodeAdd({
       product = p;
       existingRow = ex;
     } catch {
+      if (!alive.current) return;
       toast.error("Lookup failed. Try again or enter details manually.");
       setStep("scan");
       setBusy(false);
       return;
     }
+    // The user may have left this screen while the product was being looked up.
+    if (!alive.current) return;
 
     // Reject products that aren't food/cosmetics/medicine (electronics, books, etc.).
     if (product.found && product.supported === false) {
@@ -140,7 +146,7 @@ export function BarcodeAdd({
       setUnknownBarcode(barcode);
       setStep("ocr");
       setBusy(false);
-      toast.message("Code not in our databases — point at the label and AI will read it");
+      toast.message("Not in our product databases — photograph the label instead");
       return;
     }
 
@@ -166,7 +172,7 @@ export function BarcodeAdd({
     return (
       <div className="flex flex-col items-center gap-3 py-12 text-muted">
         <Loader2 className="h-7 w-7 animate-spin text-primary" />
-        <p className="text-sm">Working…</p>
+        <p role="status" className="text-sm">Looking up the product…</p>
       </div>
     );
   }
@@ -200,7 +206,7 @@ export function BarcodeAdd({
             </p>
           </div>
         </div>
-        <p className="text-sm text-muted">This product is already tracked. Save a separate batch and enter its printed expiry; the existing batch stays unchanged.</p>
+        <p className="text-sm text-muted">You already track this product. Add this one as a new batch with its own expiry date — the existing one stays as it is.</p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button
             className="flex-1"
@@ -209,8 +215,8 @@ export function BarcodeAdd({
             Add new batch
           </Button>
         </div>
-        <Button variant="ghost" className="w-full" onClick={() => setStep("intro")}>
-          Cancel
+        <Button variant="ghost" className="w-full" onClick={() => setStep("scan")}>
+          Scan a different product
         </Button>
       </div>
     );
@@ -222,7 +228,7 @@ export function BarcodeAdd({
         detected={rejectedName}
         onRetry={() => {
           setRejectedName(null);
-          setStep("intro");
+          setStep("scan");
         }}
       />
     );
@@ -234,8 +240,8 @@ export function BarcodeAdd({
         <p className="flex items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-accent">
           <ScanBarcode className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            Couldn&apos;t identify barcode {unknownBarcode} in our databases. Point the camera at the
-            product label — AI will read the name, dates and details automatically.
+            Barcode {unknownBarcode} isn&apos;t in our product databases. Take a photo of the label
+            instead — we&apos;ll read the name and dates for you.
           </span>
         </p>
         <ScanUploader
@@ -250,24 +256,5 @@ export function BarcodeAdd({
     );
   }
 
-  if (step === "intro") {
-    return (
-      <div className="flex flex-col items-center gap-4 py-10 text-center">
-        <span className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-primary/20 to-accent/15 text-primary">
-          <ScanBarcode className="h-8 w-8" />
-        </span>
-        <div>
-          <p className="font-semibold">Scan a product barcode</p>
-          <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
-            We&apos;ll identify the product and AI-estimate a likely expiry. You confirm before saving.
-          </p>
-        </div>
-        <Button onClick={() => setStep("scan")}>
-          <ScanBarcode className="h-4 w-4" /> Start scanning
-        </Button>
-      </div>
-    );
-  }
-
-  return <BarcodeScanner onDetected={handleDetected} onCancel={() => setStep("intro")} />;
+  return <BarcodeScanner onDetected={handleDetected} />;
 }

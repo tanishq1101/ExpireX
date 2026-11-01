@@ -190,9 +190,9 @@ export function ShoppingClient({
             <button
               onClick={clearChecked}
               disabled={busy}
-              className="inline-flex items-center gap-1 text-xs text-muted transition hover:text-foreground"
+              className="inline-flex min-h-11 items-center gap-1.5 px-1 text-sm text-muted transition hover:text-foreground"
             >
-              <Eraser className="h-3.5 w-3.5" /> Clear {checkedCount} checked
+              <Eraser className="h-4 w-4" /> Clear {checkedCount} checked
             </button>
           )}
         </div>
@@ -214,14 +214,19 @@ export function ShoppingClient({
                   onClick={() => toggle(row)}
                   disabled={busy}
                   aria-label={row.checked ? "Mark as not bought" : "Mark as bought"}
-                  className={cn(
-                    "grid h-6 w-6 shrink-0 place-items-center rounded-md border transition",
-                    row.checked
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border text-transparent hover:border-primary/60"
-                  )}
+                  aria-pressed={row.checked}
+                  className="-m-2.5 grid h-11 w-11 shrink-0 place-items-center"
                 >
-                  <Check className="h-4 w-4" />
+                  <span
+                    className={cn(
+                      "grid h-6 w-6 place-items-center rounded-md border transition",
+                      row.checked
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-transparent"
+                    )}
+                  >
+                    <Check className="h-4 w-4" />
+                  </span>
                 </button>
                 <div className="min-w-0 flex-1">
                   <p className={cn("truncate text-sm", row.checked && "text-muted line-through")}>
@@ -238,7 +243,7 @@ export function ShoppingClient({
                   onClick={() => remove(row)}
                   disabled={busy}
                   aria-label="Remove"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition hover:text-danger"
+                  className="-mr-1.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted transition hover:text-danger"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

@@ -2,8 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createClient } = require("@supabase/supabase-js");
 const { dateString, itemFormSchema } = require("../lib/validators.ts");
-const { addDays, daysBetween, todayKolkata } = require("../lib/dates.ts");
-const { getStatus } = require("../lib/status.ts");
+const { addDays, daysBetween, todayKolkata, formatDate } = require("../lib/dates.ts");
+const { getStatus, countdown } = require("../lib/status.ts");
 const { estimateShelfLifeLocal } = require("../lib/shelf-life.ts");
 const { csvCell, inventoryCsv } = require("../lib/csv.ts");
 const { inventoryFilters, inventoryQuery } = require("../lib/inventory.ts");
@@ -84,4 +84,38 @@ test("inventory requests combine literal search, expiry window, location and sta
   assert.equal(url.searchParams.get("order"), "name.asc,id.asc");
   assert.equal(url.searchParams.get("offset"), "24");
   assert.equal(url.searchParams.get("limit"), "24");
+});
+
+test("list countdown reads naturally across the whole range", () => {
+  const today = "2026-10-27";
+  const at = (days) => countdown(today, addDays(today, days));
+  assert.deepEqual(at(-3), { value: "3d", caption: "overdue", status: "expired" });
+  assert.deepEqual(at(-90), { value: "3mo", caption: "overdue", status: "expired" });
+  assert.deepEqual(at(0), { value: "Today", caption: "", status: "expiring" });
+  assert.deepEqual(at(1), { value: "Tomorrow", caption: "", status: "expiring" });
+  assert.deepEqual(at(5), { value: "5", caption: "days left", status: "expiring" });
+  assert.deepEqual(at(21), { value: "3", caption: "weeks left", status: "expiring" });
+  assert.deepEqual(at(31), { value: "4", caption: "weeks left", status: "ok" });
+  assert.deepEqual(at(120), { value: "4", caption: "months left", status: "ok" });
+  assert.deepEqual(at(800), { value: "2", caption: "years left", status: "ok" });
+});
+
+test("dates format identically on server and browser", () => {
+  assert.equal(formatDate("2027-03-12"), "12 Mar 2027");
+  assert.equal(formatDate("2028-02-29"), "29 Feb 2028");
+  assert.equal(formatDate("not-a-date"), "not-a-date");
+});
+
+test("urgent view includes overdue items: only an upper bound, never a lower one", async () => {
+  assert.equal(inventoryFilters({ status: "urgent" }).status, "urgent");
+  let captured = "";
+  const client = createClient("https://example.supabase.co", "test-anon-key", {
+    global: { fetch: async (input) => {
+      captured = String(input);
+      return new Response("[]", { headers: { "Content-Type": "application/json", "Content-Range": "0-0/0" } });
+    } },
+  });
+  await inventoryQuery(client, { status: "urgent" }, "2026-10-27").range(0, 23);
+  // Overdue rows must be returned: a `gte` bound here would hide expired items again.
+  assert.deepEqual(new URL(captured).searchParams.getAll("effective_expiry"), ["lte.2026-11-03"]);
 });

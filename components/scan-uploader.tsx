@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, ScanLine } from "lucide-react";
 import type { Extraction } from "@/lib/validators";
@@ -15,13 +15,17 @@ export function ScanUploader({ onExtracted }: {
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
   const [rejected, setRejected] = useState<{ detected: string | null } | null>(null);
+  const busy = useRef(false);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
-  async function scan() {
-    if (!file) return;
+  async function scan(target: File) {
+    if (busy.current) return;
+    busy.current = true;
     setScanning(true);
     try {
       const body = new FormData();
-      body.append("file", file);
+      body.append("file", target);
       // Respect the user's OCR-engine preference (Settings): "ai" (default) or "tesseract".
       let engine = "ai";
       try {
@@ -35,17 +39,20 @@ export function ScanUploader({ onExtracted }: {
         rejected?: boolean;
         detected?: string | null;
       }>(`/api/scan?engine=${engine}`, { method: "POST", body });
+      // The user may have left this screen while the photo was being read.
+      if (!alive.current) return;
       if (json.rejected) {
         setRejected({ detected: json.detected ?? null });
         return;
       }
       if (!json.extraction) throw new Error("Couldn’t read the image.");
       toast.success("Photo read — check the details before saving");
-      onExtracted(json.extraction, file);
+      onExtracted(json.extraction, target);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Scan failed.");
+      if (alive.current) toast.error(err instanceof Error ? err.message : "Scan failed.");
     } finally {
-      setScanning(false);
+      busy.current = false;
+      if (alive.current) setScanning(false);
     }
   }
 
@@ -59,18 +66,22 @@ export function ScanUploader({ onExtracted }: {
   return (
     <div className="space-y-4" aria-busy={scanning}>
       <ImageCapture
-        onPick={setFile}
+        onPick={(picked) => {
+          setFile(picked);
+          // Reading starts as soon as the photo is taken or chosen — no extra tap.
+          void scan(picked);
+        }}
         onClear={() => setFile(null)}
         disabled={scanning}
-        hint="Take a clear close-up of the product name and printed expiry date. You’ll check the details before saving."
+        hint="Fill the frame with the product name and the printed expiry date. Good light helps. You’ll check everything before saving."
       />
       {file && (
-        <Button className="w-full" onClick={scan} disabled={scanning}>
+        <Button className="w-full" onClick={() => scan(file)} disabled={scanning}>
           {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
-          {scanning ? "Reading photo…" : "Read label"}
+          {scanning ? "Reading the label…" : "Read label again"}
         </Button>
       )}
-      {scanning && <p role="status" className="text-center text-sm text-muted">This may take a little while. Keep this screen open.</p>}
+      {scanning && <p role="status" className="text-center text-sm text-muted">This usually takes a few seconds. Keep this screen open.</p>}
     </div>
   );
 }

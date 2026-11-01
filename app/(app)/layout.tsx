@@ -27,7 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4 pb-28 pt-6 sm:pb-10">
+    <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-[calc(1.25rem+env(safe-area-inset-top))] sm:pb-10">
       <AppNav email={email ?? ""} />
       <main className="flex-1">{(syncFailed || !email) && <p role="alert" className="mb-4 rounded-xl border border-danger/40 p-3 text-sm text-danger">{syncFailed ? "Account sync failed. Reload before adding items; email reminders may be unavailable." : "Verify your primary email address in your account to receive reminders."}</p>}{children}</main>
     </div>
