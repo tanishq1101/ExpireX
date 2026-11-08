@@ -8,6 +8,7 @@ import type { Category } from "@/types/database";
 const SOURCES: { host: string; category: Category }[] = [
   { host: "world.openfoodfacts.org", category: "food" },
   { host: "world.openbeautyfacts.org", category: "cosmetics" },
+  { host: "world.openpetfoodfacts.org", category: "food" },
   { host: "world.openproductsfacts.org", category: "other" },
 ];
 
@@ -48,6 +49,8 @@ function toResult(barcode: string, category: Category, p: OffProduct): ProductLo
     size: (p.quantity || "").trim() || null,
     category: resolved,
     image_url: p.image_front_url || p.image_url || null,
+    // English category tags ("en:uht-milks") help the shelf-life table recognise the product.
+    tags: (p.categories_tags ?? []).filter((t) => t.startsWith("en:")).slice(-12),
     // The general products DB ("other") isn't a consumable unless tags say otherwise.
     supported: isConsumable(resolved),
   };
@@ -108,6 +111,7 @@ async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
       size: null,
       category,
       image_url: it?.images?.[0] || null,
+      tags: catStr ? catStr.split(/\s*>\s*/).slice(-3) : [],
       // Only food/cosmetics/medicine are trackable; electronics/clothes/"other" → rejected.
       supported: isConsumable(category) && !UNSUPPORTED_RE.test(catStr),
     };

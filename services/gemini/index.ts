@@ -22,7 +22,7 @@ const RULES = `Return ONLY JSON with exactly these keys:
 - "brand": string | null          (maker/brand if printed)
 - "expiry_date": string | null    (ISO "YYYY-MM-DD"; the EXPIRY/USE-BY/BEST-BEFORE date, NOT manufacture)
 - "manufacture_date": string | null (ISO "YYYY-MM-DD"; MFG/MFD/PKD/"packed on" if present)
-- "expiry_text": string | null     (the expiry date EXACTLY as printed, character for character, e.g. "15/06/27" or "JUN 2027" — copy it, do not reformat)
+- "expiry_text": string | null     (the expiry date EXACTLY as printed, character for character, e.g. "15/06/27" or "JUN 2027" — copy it, do not reformat. If the expiry is only given relative to manufacture, copy that sentence, e.g. "Best before 9 months from packaging")
 - "manufacture_text": string | null (the manufacture date EXACTLY as printed)
 - "category": one of [${CATEGORIES.join(", ")}] | null
 - "quantity": number | null       (net amount as a number, e.g. 500 for "500 g", 1 for "1 L")
@@ -54,6 +54,10 @@ Rules:
 - If the label states a shelf life relative to manufacture (e.g. "Best before 6 months from the date of manufacture", "Use within 24 months of MFG") AND a manufacture/packing date is printed, set expiry_date = that manufacture date + that period and estimated = false. If no manufacture date is printed, leave expiry_date null.
 - Dates contain digits only: read "O" as 0 and "I"/"l" as 1 inside a date. Ink-jet dates are often small, on the base, cap or crimp — look for them.
 - Ignore batch/lot numbers, MRP and prices, and barcode digits: they are never dates.
+- PKD/PKG/"packed on"/MFD/DOM/"date of manufacture" dates are MANUFACTURE dates — never put them in expiry_date.
+- "Use within N months of opening" (or a 6M/12M open-jar symbol) is NOT an expiry date.
+- If two dates are printed under one combined heading such as "MFD/EXP" or "PKD & USE BY", the EARLIER date is manufacture and the LATER date is expiry.
+- US-style "MM/DD/YYYY" appears only on imported goods; if the first number is greater than 12 it is a day.
 - Medicines: read the printed "EXP" date; set category to "medicine". NEVER estimate a medicine expiry. If no printed expiry is legible, return null expiry_date.
 - Cosmetics/makeup/skincare: set category to "cosmetics". If only a Period-After-Opening symbol ("12M", "24M") is shown and there is no printed expiry, leave expiry_date null.
 - For fresh unpackaged items without a printed date, leave expiry_date, freshness and freshness_note null. A photo cannot establish a safe expiry. Do not estimate dates during label extraction.
@@ -360,15 +364,22 @@ Ignore batch/lot numbers, prices, MRP, barcodes and phone numbers. If there is n
 export async function geminiEstimateShelfLife(
   productName: string,
   category: string,
-  baseDate: string
+  baseDate: string,
+  context: { storage?: "pantry" | "fridge" | "freezer" | null; reference?: string | null } = {}
 ): Promise<ShelfLife> {
-  const prompt = `You are a food-safety and product shelf-life expert.
+  const where =
+    context.storage === "freezer" ? "in the freezer"
+    : context.storage === "fridge" ? "in the refrigerator"
+    : context.storage === "pantry" ? "at room temperature (India, often 25–35°C)"
+    : "in its usual storage place (typical Indian household)";
+  const prompt = `You are a food-safety and product shelf-life expert for Indian households.
 Estimate a realistic EXPIRY date for the product below, measured from the base date.
 
-Product: "${productName}"
+Product: ${JSON.stringify(productName.slice(0, 200))}
 Category: ${category}
 Base date (manufacture or purchase): ${baseDate} (Asia/Kolkata)
-
+Stored: ${where}
+${context.reference ? `Reference from our shelf-life table: "${context.reference}" Use it unless this specific product is clearly different (e.g. a packaged, preservative-added or UHT version).\n` : ""}
 Return ONLY JSON with exactly these keys:
 - "expiry_date": string | null  (ISO "YYYY-MM-DD"; base date + a typical unopened shelf life)
 - "confidence": "high" | "medium" | "low" | null
@@ -376,7 +387,8 @@ Return ONLY JSON with exactly these keys:
 - "tips": string[] | null  (at most 2 short, practical storage/usage tips, each under 12 words)
 
 Rules:
-- Base the estimate on typical UNOPENED shelf life for this kind of product.
+- Base the estimate on typical UNOPENED shelf life for this kind of product, in the storage place given above.
+- Indian fresh pouch milk keeps ~2–3 days refrigerated; UHT/tetra milk ~6 months unopened. Fresh paneer/curd about a week.
 - Fresh perishables (dairy, produce, bakery, cooked/fresh food) = days to ~2 weeks.
 - Packaged/canned/dry food = months to a couple of years.
 - Medicines: never estimate their expiry; return null expiry_date and confidence.

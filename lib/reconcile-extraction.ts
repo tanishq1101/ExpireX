@@ -19,6 +19,13 @@ export function reconcileExtraction(ex: Extraction, today: string, ocrText?: str
   const fromMfgText = out.manufacture_text ? parseDateText(out.manufacture_text, "mfg") : null;
   if (fromMfgText) out.manufacture_date = fromMfgText;
 
+  // "Best before 9 months from packaging": do the date maths here rather than trust the model's.
+  if (!fromExpiryText && out.expiry_text && out.manufacture_date && /\d|\b(?:ONE|TWO|THREE|SIX|NINE|TWELVE|EIGHTEEN)\b/i.test(out.expiry_text)) {
+    const [y, m, d] = out.manufacture_date.split("-");
+    const relative = parseOcrText(`MFG ${d}/${m}/${y}\n${out.expiry_text}`, today).expiry_date;
+    if (relative && relative !== out.manufacture_date) out.expiry_date = relative;
+  }
+
   // Labelled dates in raw OCR text beat a model's reading of that same text.
   if (ocrText) {
     const parsed = parseOcrText(ocrText, today);
@@ -34,7 +41,8 @@ export function reconcileExtraction(ex: Extraction, today: string, ocrText?: str
   const slack = new Date(`${today}T00:00:00Z`);
   slack.setUTCDate(slack.getUTCDate() + 31);
   if (out.manufacture_date && out.manufacture_date > slack.toISOString().slice(0, 10)) out.manufacture_date = null;
-  // A product cannot expire before it was made: one of the two was misread, so ask the user.
-  if (out.expiry_date && out.manufacture_date && out.expiry_date < out.manufacture_date) out.expiry_date = null;
+  // A product cannot expire before (or on the day) it was made: one of the two was misread —
+  // typically the packing date copied into the expiry — so ask the user.
+  if (out.expiry_date && out.manufacture_date && out.expiry_date <= out.manufacture_date) out.expiry_date = null;
   return out;
 }

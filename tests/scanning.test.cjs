@@ -28,6 +28,23 @@ for (const [label, expected] of [
   ["Lot 06/27", null],
   ["EXP 13/27", null],
   ["MFG 06/27", null],
+  // Packing dates are never an expiry; relative shelf life is counted from them.
+  ["PKG 01/06/2026", null],
+  ["PKG 01/06/2026 Best before 6 months from packaging", "2026-12-01"],
+  ["DOM 12/2025 EXP 11/2027", "2027-11-30"],
+  ["PKD 05/26 Consume within 180 days from packing", "2026-11-27"],
+  ["MFD 01/03/2026 Best before twelve months from manufacture", "2027-03-01"],
+  // "Once opened" periods are not expiry dates.
+  ["MFD 01/03/2026 Use within 3 months of opening", null],
+  // Labels with a "DATE"/"END" word, and month-name with a 2-digit year.
+  ["EXP DATE: 06/27", "2027-06-30"],
+  ["BEST BEFORE END 08/27", "2027-08-31"],
+  ["EXP JUN 27", "2027-06-30"],
+  ["USE BY: SEP-26", "2026-09-30"],
+  // Combined headings: earlier date is manufacture, later is expiry, whatever the order.
+  ["MFD/EXP: 05.11.26 04.05.27", "2027-05-04"],
+  ["EXP/MFG 04.05.27 05.11.26", "2027-05-04"],
+  ["EXPORT QUALITY 12/05/2026", null],
 ]) {
   test(`OCR: ${label}`, () => assert.equal(parseOcrText(`Test product\n${label}`, today).expiry_date, expected));
 }
@@ -152,6 +169,11 @@ test("reconcile fixes a model day/month swap using the transcribed text", () => 
   // Text the parser cannot read (relative shelf life) leaves the model's computed date alone.
   const k = reconcileExtraction({ ...base, expiry_date: "2027-07-15", expiry_text: "6 months from mfg" }, today);
   assert.equal(k.expiry_date, "2027-07-15");
+  // With a manufacture date, the relative period is computed here instead of trusting the model.
+  const rel = reconcileExtraction({ ...base, expiry_date: "2027-01-15", manufacture_date: "2026-06-01", expiry_text: "Best before 9 months from packaging" }, today);
+  assert.equal(rel.expiry_date, "2027-03-01");
+  // A packing date copied into the expiry is thrown out so the user is asked.
+  assert.equal(reconcileExtraction({ ...base, expiry_date: "2026-06-01", manufacture_date: "2026-06-01" }, today).expiry_date, null);
 });
 
 test("reconcile drops dates that cannot be right instead of guessing", () => {

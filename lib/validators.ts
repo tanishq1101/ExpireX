@@ -128,4 +128,6 @@ export type ProductLookup = {
   image_url: string | null;
   // false when the resolved product is clearly NOT an expiry item (electronics, books…)
   supported?: boolean;
+  // Product-database category tags, used only as shelf-life hints.
+  tags?: string[];
 };

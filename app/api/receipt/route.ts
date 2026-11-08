@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { geminiExtractReceipt } from "@/services/gemini";
 import { rateLimit } from "@/lib/rate-limit";
 import { todayKolkata } from "@/lib/dates";
+import { estimateShelfLifeLocal } from "@/lib/shelf-life";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -34,8 +35,17 @@ export async function POST(request: Request) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   try {
-    const result = await geminiExtractReceipt(buffer.toString("base64"), file.type, todayKolkata());
-    return NextResponse.json({ ...result, items: result.items.map((item) => item.category === "medicine" ? { ...item, expiry_date: null } : item) });
+    const today = todayKolkata();
+    const result = await geminiExtractReceipt(buffer.toString("base64"), file.type, today);
+    return NextResponse.json({
+      ...result,
+      items: result.items.map((item) => {
+        if (item.category === "medicine") return { ...item, expiry_date: null };
+        // A confident shelf-life table match is more consistent than a per-line model guess.
+        const local = estimateShelfLifeLocal(item.name, item.category ?? "food", today);
+        return local.expiry_date && local.confidence === "high" ? { ...item, expiry_date: local.expiry_date } : item;
+      }),
+    });
   } catch {
     return NextResponse.json(
       { error: "Couldn’t read the receipt. Try a clearer photo." },

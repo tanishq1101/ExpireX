@@ -53,7 +53,9 @@ export async function POST(request: Request) {
   /** Gemini sometimes misses small ink-jet dates on the first look; ask again, transcription only. */
   async function withDateSecondLook(raw: Extraction): Promise<Extraction> {
     const consumable = raw.item_type === "food" || raw.item_type === "cosmetics" || raw.item_type === "medicine";
-    if (!consumable || (raw.expiry_date && !raw.estimated) || Date.now() - started > OPTIONAL_PASS_DEADLINE_MS) return raw;
+    // Judge the first reading after cross-checking: a date the checks throw out needs a second look too.
+    const checked = reconcileExtraction(raw, today);
+    if (!consumable || (checked.expiry_date && !checked.estimated) || Date.now() - started > OPTIONAL_PASS_DEADLINE_MS) return raw;
     try {
       const found = await geminiFindDates(buffer.toString("base64"), file!.type, today);
       if (!found.expiry_date) return raw;

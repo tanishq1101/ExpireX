@@ -41,7 +41,33 @@ test("Kolkata day boundaries and status windows agree", () => {
 test("medicine and document dates are never inferred from keywords", () => {
   assert.equal(estimateShelfLifeLocal("Vitamin tablets", "medicine", "2026-10-27").expiry_date, null);
   assert.equal(estimateShelfLifeLocal("Milk permit", "documents", "2026-10-27").expiry_date, null);
-  assert.equal(estimateShelfLifeLocal("Milk", "food", "2026-10-27").expiry_date, "2026-11-03");
+  assert.equal(estimateShelfLifeLocal("Milk", "food", "2026-10-27").expiry_date, "2026-10-30");
+  // Medicine still gets "once opened" guidance even though its expiry is never inferred.
+  assert.equal(estimateShelfLifeLocal("Refresh Tears Eye Drops", "medicine", "2026-10-27").open_days, 28);
+});
+
+test("shelf-life table picks what the product is, not its flavour", () => {
+  const label = (name, category) => estimateShelfLifeLocal(name, category, "2026-10-27").label;
+  for (const [name, category, expected] of [
+    ["Lay's Classic Salted Potato Chips 52g", "food", "Chips / crisps"],
+    ["Tomato Ketchup", "food", "Ketchup / sauce"],
+    ["Apple Juice 1L", "food", "Packaged juice"],
+    ["Egg Noodles", "food", "Dry pasta / noodles"],
+    ["Cadbury Dairy Milk Silk", "food", "Chocolate"],
+    ["Chocolate Milk", "food", "Flavoured milk drink"],
+    ["Britannia Good Day Butter Cookies", "food", "Biscuits / cookies"],
+    ["Maggi 2-Minute Noodles Masala", "food", "Instant noodles"],
+    ["Nivea Soft Moisturising Cream", "cosmetics", "Face cream / moisturiser"],
+    ["Amul Fresh Cream", "food", "Dairy cream"],
+    ["Frozen Green Peas", "food", "Frozen vegetables"],
+  ]) assert.equal(label(name, category), expected, name);
+  assert.equal(estimateShelfLifeLocal("Unknown gadget food", "food", "2026-10-27").expiry_date, null);
+});
+
+test("shelf-life follows storage and never leaves raw meat at room temperature", () => {
+  assert.equal(estimateShelfLifeLocal("Chicken breast", "food", "2026-10-27", { storage: "pantry" }).expiry_date, "2026-10-27");
+  assert.equal(estimateShelfLifeLocal("Bread", "food", "2026-10-27", { storage: "freezer" }).expiry_date, "2027-01-25");
+  assert.equal(estimateShelfLifeLocal("Curd", "food", "2026-10-27", { storage: "freezer" }).storage, "fridge");
 });
 
 test("CSV quoting preserves multiline text and neutralizes spreadsheet formulas", () => {

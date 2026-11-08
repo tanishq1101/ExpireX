@@ -2,7 +2,7 @@
 
 import { Info, Zap, ArrowRight, RotateCcw } from "lucide-react";
 import { cn, externalImageUrl } from "@/lib/utils";
-import { daysBetween } from "@/lib/dates";
+import { daysBetween, formatDate } from "@/lib/dates";
 import { CATEGORY_META } from "@/lib/categories";
 import type { Category } from "@/types/database";
 import { Button } from "@/components/ui/button";
@@ -15,10 +15,9 @@ export type Analysis = {
   expiryDate?: string | null;
   confidence?: "high" | "medium" | "low" | null;
   tips?: string[] | null;
-  estimating?: boolean; // AI estimate still in flight — show a placeholder
+  basis?: string | null; // one plain sentence, e.g. "Chips usually keep about 4 months at room temperature."
+  estimating?: boolean; // estimate still in flight — show a placeholder
 };
-
-const CONF_LABEL: Record<string, string> = { high: "HIGH", medium: "MEDIUM", low: "LOW" };
 
 export function ProductAnalysisCard({
   analysis,
@@ -31,21 +30,21 @@ export function ProductAnalysisCard({
   onContinue: () => void;
   onRescan: () => void;
 }) {
-  const { name, imageUrl, category, size, expiryDate, confidence, tips, estimating } = analysis;
+  const { name, imageUrl, category, size, expiryDate, tips, basis, estimating } = analysis;
   const img = externalImageUrl(imageUrl);
   const Icon = CATEGORY_META[(category as Category) ?? "other"].icon;
 
   const days = expiryDate ? daysBetween(today, expiryDate) : null;
   const expTone =
-    days == null ? "text-muted" : days < 0 ? "text-danger" : days <= 7 ? "text-warning" : "text-accent";
+    days == null ? "text-muted" : days < 0 ? "text-danger" : days <= 7 ? "text-warning" : "text-foreground";
   const expText =
     days == null
-      ? "ADD EXPIRY DATE"
+      ? "Add the expiry date printed on the pack"
       : days < 0
-        ? `EST. EXPIRED ${Math.abs(days)}D AGO`
+        ? `Probably expired ${Math.abs(days)} day${days === -1 ? "" : "s"} ago`
         : days === 0
-          ? "EST. EXPIRES TODAY"
-          : `EST. EXPIRY: ${days} DAY${days === 1 ? "" : "S"}`;
+          ? "Probably expires today"
+          : `Usually good until ${formatDate(expiryDate!)}`;
 
   return (
     <div className="relative">
@@ -64,35 +63,35 @@ export function ProductAnalysisCard({
         {/* animated scan-line */}
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px animate-scanline bg-gradient-to-r from-transparent via-accent to-transparent" aria-hidden />
 
-        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-accent">
-          Product identified
-        </p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-accent">Product found</p>
 
         {/* image / icon */}
-        <div className="mt-3 grid aspect-[4/3] w-full place-items-center overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/15 to-accent/10">
+        <div className={cn("mt-3 grid w-full place-items-center overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/15 to-accent/10", img ? "aspect-[4/3]" : "h-24")}>
           {img ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={img} alt="" className="h-full w-full object-cover" />
           ) : (
-            <Icon className="h-16 w-16 text-primary/60" />
+            <Icon className="h-10 w-10 text-primary/60" />
           )}
         </div>
 
         <h2 className="mt-4 text-2xl font-extrabold tracking-tight">{name || "Unknown product"}</h2>
         {size && <p className="mt-0.5 text-xs text-muted">Size: {size}</p>}
 
-        <div className="mt-2 flex items-center justify-between">
+        <div className="mt-3 space-y-1">
           {estimating && days == null ? (
-            <span className="inline-flex items-center gap-2 font-mono text-sm font-bold tracking-wide text-accent">
-              <span className="h-1.5 w-1.5 animate-pulse-ring rounded-full bg-accent" /> ANALYSING…
+            <span role="status" className="inline-flex items-center gap-2 text-sm font-medium text-accent">
+              <span className="h-1.5 w-1.5 animate-pulse-ring rounded-full bg-accent" /> Checking how long it usually lasts…
             </span>
           ) : (
-            <span className={cn("font-mono text-sm font-bold tracking-wide", expTone)}>{expText}</span>
-          )}
-          {confidence && !estimating && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-accent">
-              ESTIMATE · {CONF_LABEL[confidence]}
-            </span>
+            <>
+              <p className={cn("text-base font-semibold", expTone)}>{expText}</p>
+              {days != null && (
+                <p className="text-xs text-muted">
+                  {basis ? `${basis} ` : ""}This is an estimate — if a date is printed on the pack, use that.
+                </p>
+              )}
+            </>
           )}
         </div>
 

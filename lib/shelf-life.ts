@@ -1,71 +1,208 @@
 import type { Category } from "@/types/database";
 import { addDays } from "./dates";
 import type { ShelfLife } from "./validators";
+import { SHELF_LIFE_ROWS, type ShelfRow } from "./shelf-life-data";
 
-// Coarse, conservative shelf-life defaults (in days) used only when the AI estimate is
-// unavailable. Deliberately middle-of-the-road; the user always confirms before saving.
-const DEFAULT_DAYS: Record<Category, number | null> = {
-  food: 30, // generic packaged food; fresh items overridden by keywords/AI/OCR
-  medicine: null, // The printed expiry is required; never infer medicine expiry.
-  cosmetics: 730, // ~2 years unopened
-  documents: null, // no meaningful shelf life
-  warranty: 365,
-  subscription: 30,
-  other: 180,
+export type Storage = "pantry" | "fridge" | "freezer";
+
+export const STORAGE_LABEL: Record<Storage, string> = {
+  pantry: "Cupboard",
+  fridge: "Fridge",
+  freezer: "Freezer",
 };
 
-// Keyword nudges so common products across food / medicine / cosmetics get a saner default.
-const KEYWORD_DAYS: { re: RegExp; days: number }[] = [
-  // --- fresh / perishable food ---
-  { re: /\b(milk|cream|yogurt|yoghurt|curd|paneer|buttermilk|lassi)\b/i, days: 7 },
-  { re: /\b(bread|bun|pav|cake|pastry|croissant)\b/i, days: 5 },
-  { re: /\b(egg|eggs)\b/i, days: 21 },
-  { re: /\b(meat|chicken|mutton|fish|prawn|seafood|sausage)\b/i, days: 3 },
-  { re: /\b(fruit|vegetable|veggie|salad|spinach|banana|apple|tomato|onion|potato|berry|berries)\b/i, days: 7 },
-  { re: /\b(juice|smoothie|shake)\b/i, days: 10 },
-  { re: /\b(cheese)\b/i, days: 30 },
-  { re: /\b(butter|ghee|margarine)\b/i, days: 120 },
-  { re: /\b(tofu|sprouts)\b/i, days: 5 },
-  { re: /\b(cooked|leftover|fresh)\b/i, days: 3 },
-  // --- packaged / dry food ---
-  { re: /\b(canned|tinned|pickle|achar|jam|honey|sauce|ketchup|mayonnaise|spread)\b/i, days: 540 },
-  { re: /\b(chips|biscuit|cookie|namkeen|chocolate|candy|snack|wafer|chips)\b/i, days: 150 },
-  { re: /\b(rice|flour|atta|maida|pasta|noodle|lentil|dal|pulse|sugar|salt|spice|masala)\b/i, days: 365 },
-  { re: /\b(oil|vinegar)\b/i, days: 365 },
-  { re: /\b(tea|coffee|cereal|oats|muesli)\b/i, days: 300 },
-  { re: /\b(nuts|almond|cashew|dry\s?fruit|raisin)\b/i, days: 180 },
-  { re: /\b(water|soda|cola|soft\s?drink|beer)\b/i, days: 270 },
-  // --- medicines ---
-  {
-    re: /\b(tablet|tablets|capsule|capsules|syrup|tonic|ointment|drops|inhaler|antibiotic|paracetamol|ibuprofen|antacid|medicine|supplement|vitamin|sachet|injection)\b/i,
-    days: 730,
-  },
-  // --- cosmetics / personal care ---
-  {
-    re: /\b(cream|lotion|moisturiser|moisturizer|serum|shampoo|conditioner|soap|face\s?wash|cleanser|toner|sunscreen|spf|lipstick|lip\s?balm|foundation|concealer|mascara|kajal|eyeliner|compact|blush|perfume|deodorant|deo|nail\s?polish|makeup|make-?up\s?kit|powder)\b/i,
-    days: 730,
-  },
-];
+/** Words that usually describe a flavour or ingredient rather than what the product is. */
+const FLAVOUR_WORDS = new Set([
+  "milk", "chocolate", "cream", "butter", "cheese", "mango", "orange", "lemon", "lime", "tomato",
+  "chicken", "honey", "salt", "pepper", "garlic", "onion", "mint", "coffee", "strawberry", "vanilla",
+  "banana", "apple", "coconut", "ginger", "rose", "egg", "fruit", "spinach", "potato", "corn",
+  "almond", "almonds", "cashew", "peanut", "peanuts", "ghee", "paneer", "curd", "malai", "tea",
+  "jam", "fish", "meat", "rice", "oats", "dates", "sugar", "jaggery", "masala", "cocoa", "pista",
+  "kesar", "elaichi", "badam", "chilli", "mushroom", "pizza", "pasta", "sauce", "soda", "water",
+]);
 
-/** Offline shelf-life estimate. Returns null expiry for categories without a shelf life. */
+/** Lowercase, drop pack sizes and punctuation so "Amul Butter 500g (Pasteurised)" → "amul butter pasteurised". */
+export function normalizeProductName(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['’`]/g, "")
+    .replace(/\b\d+(?:[.,]\d+)?\s*(?:x\s*\d+(?:[.,]\d+)?\s*)?(?:g|gm|gms|gram|grams|kg|kgs|mg|ml|l|ltr|ltrs|litre|litres|liter|liters|oz|lb|lbs|pcs|pc|pieces|n|nos|tabs|caps|pack|packs|sachets?|units?|count|ct)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type IndexedRow = { row: ShelfRow; keywords: { text: string; words: number; re: RegExp }[] };
+
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const INDEX: IndexedRow[] = SHELF_LIFE_ROWS.map((row) => ({
+  row,
+  keywords: row[0].split("|").map((raw) => {
+    const text = normalizeProductName(raw);
+    // Whole words only, tolerant of simple plurals ("biscuit" ↔ "biscuits", "tomato" ↔ "tomatoes").
+    return { text, words: text.split(" ").length, re: new RegExp(`(?:^| )${escape(text)}(?:s|es)?(?= |$)`) };
+  }),
+}));
+
+export type ShelfMatch = {
+  row: ShelfRow;
+  keyword: string;
+  confidence: "high" | "medium" | "low";
+  score: number;
+};
+
+function bestMatch(text: string, category: Category | null, fromHint: boolean): ShelfMatch | null {
+  if (!text) return null;
+  const tokens = text.split(" ").length;
+  let best: ShelfMatch | null = null;
+  for (const { row, keywords } of INDEX) {
+    // A face cream must never inherit dairy cream's shelf life, and vice versa.
+    if (category && category !== "other" && row[1] !== category) continue;
+    for (const kw of keywords) {
+      const m = kw.re.exec(text);
+      if (!m) continue;
+      const start = m.index + (m[0].startsWith(" ") ? 1 : 0);
+      const endToken = text.slice(0, start).split(" ").filter(Boolean).length + kw.words; // 1-based
+      const last = endToken >= tokens;
+      // Product names put the head noun last ("Potato Chips", "Apple Juice", "Butter Cookies").
+      let score = kw.words * 10 + (fromHint ? 2 : (6 * endToken) / tokens) + kw.text.length * 0.01;
+      const flavour = kw.words === 1 && FLAVOUR_WORDS.has(kw.text) && !last;
+      if (flavour) score -= 5;
+      const confidence: ShelfMatch["confidence"] =
+        flavour ? "low"
+        : fromHint ? (kw.words >= 2 ? "medium" : "low")
+        : kw.words >= 2 || endToken >= tokens - 1 ? "high"
+        : "medium";
+      if (!best || score > best.score) best = { row, keyword: kw.text, confidence, score };
+    }
+  }
+  return best;
+}
+
+/**
+ * Find the dataset entry that best describes a product. Category tags from product databases
+ * ("en:uht-milks") are used as hints when the name alone is not conclusive.
+ */
+export function matchShelfLife(name: string, category?: Category | null, hints: string[] = []): ShelfMatch | null {
+  const byName = bestMatch(normalizeProductName(name), category ?? null, false);
+  if (byName?.confidence === "high") return byName;
+  let byHint: ShelfMatch | null = null;
+  for (const hint of hints.slice(0, 30)) {
+    const text = normalizeProductName(hint.replace(/^[a-z]{2}:/i, "").replace(/-/g, " "));
+    const m = bestMatch(text, category ?? null, true);
+    if (m && (!byHint || m.score > byHint.score)) byHint = m;
+  }
+  if (byHint?.confidence === "medium" && (!byName || byName.confidence === "low")) return byHint;
+  if (!byName) return byHint;
+  if (byHint && byHint.score > byName.score && byName.confidence === "low") return byHint;
+  return byName;
+}
+
+/** Read a free-text storage location ("Kitchen fridge", "Deep freezer", "Medicine box"). */
+export function storageFromLocation(location?: string | null, name?: string | null): Storage | null {
+  const loc = (location ?? "").toLowerCase();
+  if (/freez|deep\s*freeze/.test(loc)) return "freezer";
+  if (/fridge|refrig|chiller|cooler/.test(loc)) return "fridge";
+  if (/cupboard|pantry|shelf|kitchen|room|cabinet|drawer|counter|rack|box|bathroom|almirah|store|basket|table/.test(loc)) return "pantry";
+  if (/\bfrozen\b/i.test(name ?? "")) return "freezer";
+  return null;
+}
+
+function humanDays(days: number): string {
+  if (days === 1) return "1 day";
+  if (days < 14) return `${days} days`;
+  if (days < 60) return `${Math.round(days / 7)} weeks`;
+  if (days < 730) return `${Math.round(days / 30)} months`;
+  return `${Math.round(days / 365)} years`;
+}
+
+const WHERE: Record<Storage, string> = {
+  pantry: "at room temperature",
+  fridge: "in the fridge",
+  freezer: "in the freezer",
+};
+
+/** Days a dataset entry keeps in a given place, falling back sensibly when it doesn't apply. */
+export function daysFor(row: ShelfRow, wanted: Storage | null): { days: number; storage: Storage; warning?: string } | null {
+  const [, , pantry, fridge, freezer] = row;
+  const natural: Storage | null = pantry != null ? "pantry" : fridge != null ? "fridge" : freezer != null ? "freezer" : null;
+  if (!natural) return null;
+  const storage = wanted ?? natural;
+  if (storage === "freezer") {
+    if (freezer != null) return { days: freezer, storage };
+    if (fridge != null) return { days: fridge, storage: "fridge", warning: "This doesn’t freeze well, so we used the fridge time." };
+    return { days: pantry!, storage: "pantry" };
+  }
+  if (storage === "fridge") {
+    if (fridge != null) return { days: fridge, storage };
+    if (pantry != null) return { days: pantry, storage: "pantry" };
+    return { days: freezer!, storage: "freezer" };
+  }
+  if (pantry != null) return { days: pantry, storage };
+  // Perishables left out of the fridge are a same-day item.
+  return { days: 0, storage: "pantry", warning: "This needs the fridge. Out of the fridge, use it today." };
+}
+
+export type LocalEstimate = ShelfLife & {
+  storage?: Storage | null;
+  /** Typical days it keeps once opened — used to suggest "use within" when the pack is opened. */
+  open_days?: number | null;
+  label?: string | null;
+};
+
+// Used only when the product isn't in the dataset. Food is left blank on purpose: a random
+// "30 days" for an unknown food is worse than asking the user to read the pack.
+const CATEGORY_DEFAULT_DAYS: Partial<Record<Category, number>> = {
+  cosmetics: 730,
+  warranty: 365,
+  subscription: 30,
+};
+
+/** Offline shelf-life estimate from the dataset. Medicine and documents are never estimated. */
 export function estimateShelfLifeLocal(
   productName: string,
   category: Category,
-  baseDate: string
-): ShelfLife {
-  if (category === "medicine" || category === "documents") {
-    return { expiry_date: null, confidence: null, basis: null };
+  baseDate: string,
+  opts: { storage?: Storage | null; hints?: string[] } = {}
+): LocalEstimate {
+  const none: LocalEstimate = { expiry_date: null, confidence: null, basis: null };
+  if (category === "documents") return none;
+  const match = category === "warranty" || category === "subscription" ? null : matchShelfLife(productName, category, opts.hints);
+  if (category === "medicine") {
+    // Never invent a medicine expiry, but still say how long it lasts once opened.
+    return { ...none, open_days: match?.row[5] ?? null, label: match?.row[6] ?? null, tips: match?.row[7] ? [match.row[7]] : null };
   }
-  const kw = KEYWORD_DAYS.find((k) => k.re.test(productName));
-  const days = kw?.days ?? DEFAULT_DAYS[category];
-  if (days == null) {
-    return { expiry_date: null, confidence: null, basis: null };
+  if (match) {
+    const picked = daysFor(match.row, opts.storage ?? storageFromLocation(null, productName));
+    if (picked) {
+      const [, , , , , opened, label, tip] = match.row;
+      const tips = [picked.warning, tip].filter((t): t is string => !!t).slice(0, 2);
+      return {
+        expiry_date: addDays(baseDate, picked.days),
+        confidence: match.confidence,
+        basis: (picked.days > 0
+          ? `${label} usually keeps about ${humanDays(picked.days)} ${WHERE[picked.storage]}.`
+          : `${label} should be used the same day if it isn’t refrigerated.`).slice(0, 160),
+        tips: tips.length ? tips : null,
+        storage: picked.storage,
+        open_days: opened,
+        label,
+      };
+    }
   }
+  const days = CATEGORY_DEFAULT_DAYS[category];
+  if (days == null) return none;
   return {
     expiry_date: addDays(baseDate, days),
-    confidence: kw ? "medium" : "low",
-    basis: `Typical shelf life for ${kw ? "this product" : category} is about ${
-      days >= 60 ? `${Math.round(days / 30)} months` : `${days} days`
-    }.`,
+    confidence: "low",
+    basis: `Most ${category === "cosmetics" ? "unopened cosmetics" : category} last about ${humanDays(days)}.`,
   };
+}
+
+/** How many days a product typically keeps once opened (null when unknown). */
+export function openedDaysFor(productName: string, category: Category): number | null {
+  if (category === "documents" || category === "warranty" || category === "subscription") return null;
+  return matchShelfLife(productName, category)?.row[5] ?? null;
 }

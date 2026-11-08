@@ -41,13 +41,13 @@ export function BarcodeAdd({
   const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
 
   // Kick off the AI expiry estimate in the background and stream it into the card.
-  function runEstimate(name: string, category: string) {
-    fetchJson<ShelfLife>("/api/estimate", {
+  function runEstimate(name: string, category: string, hints: string[] = []) {
+    fetchJson<ShelfLife & { basis?: string | null }>("/api/estimate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, category }),
+      body: JSON.stringify({ name, category, hints }),
     })
-      .then((est: ShelfLife) => {
+      .then((est) => {
         setAnalysis((prev) =>
           prev
             ? {
@@ -55,6 +55,7 @@ export function BarcodeAdd({
                 expiryDate: est.expiry_date ?? null,
                 confidence: est.confidence ?? null,
                 tips: est.tips ?? null,
+                basis: est.basis ?? null,
                 estimating: false,
               }
             : prev
@@ -66,11 +67,11 @@ export function BarcodeAdd({
           if (est.expiry_date) {
             initial.expiry_date = est.expiry_date;
             initial.expiry_source = "estimated";
-            notice = `Identified "${initial.name}" by barcode. Expiry is an AI estimate${
+            notice = `We found "${initial.name}". The expiry below is a typical estimate${
               est.basis ? ` (${est.basis})` : ""
-            } — please confirm or scan the printed date.`;
+            }. If a date is printed on the pack, use that instead.`;
           } else {
-            notice = `Identified "${initial.name}" by barcode. Add the expiry date (scan the label or enter it).`;
+            notice = `We found "${initial.name}". Now add the expiry date printed on the pack.`;
           }
           return { initial, notice };
         });
@@ -161,11 +162,11 @@ export function BarcodeAdd({
       tips: null,
       estimating: true,
     });
-    setPending({ initial, notice: `Identified "${initial.name}" by barcode. Estimating expiry…` });
+    setPending({ initial, notice: `We found "${initial.name}". Add the expiry date printed on the pack.` });
     setStep("analysis");
     setBusy(false);
     toast.success("Product identified");
-    runEstimate(initial.name ?? "", initial.category ?? "other");
+    runEstimate(initial.name ?? "", initial.category ?? "other", product.tags ?? []);
   }
 
   if (step === "looking" || busy) {

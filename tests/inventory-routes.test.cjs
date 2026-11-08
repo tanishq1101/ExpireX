@@ -101,11 +101,26 @@ test("expiry estimate validation and medicine guard", async (t) => {
     }
     assert.equal(state.estimates, 0);
   });
-  await t.test("normal food estimates still work", async () => {
-    const response = await estimatePOST(estimateRequest({ name: "Milk", category: "food" }));
+  await t.test("known products use the shelf-life table without calling the model", async () => {
+    const response = await estimatePOST(estimateRequest({ name: "Amul Toned Milk 500ml", category: "food", location: "Fridge" }));
+    assert.equal(response.status, 200);
+    const json = await response.json();
+    assert.equal(json.source, "guide");
+    assert.equal(json.expiry_date, "2026-10-30");
+    assert.equal(json.open_days, 2);
+    assert.equal(state.estimates, 0);
+  });
+  await t.test("unknown products ask the model and keep sane answers only", async () => {
+    const response = await estimatePOST(estimateRequest({ name: "Zorbix crunch thing", category: "food" }));
     assert.equal(response.status, 200);
     assert.equal((await response.json()).source, "ai");
     assert.equal(state.estimates, 1);
+  });
+  await t.test("storage changes the estimate", async () => {
+    const fridge = await (await estimatePOST(estimateRequest({ name: "Chicken breast", category: "food", storage: "fridge" }))).json();
+    const freezer = await (await estimatePOST(estimateRequest({ name: "Chicken breast", category: "food", storage: "freezer" }))).json();
+    assert.equal(fridge.expiry_date, "2026-10-29");
+    assert.equal(freezer.expiry_date, "2027-07-24");
   });
 });
 
@@ -116,5 +131,6 @@ test("receipt extraction leaves medicine expiry blank for printed-date confirmat
   const response = await receiptPOST(new Request("http://localhost/api/receipt", { method: "POST", body }));
   const { items } = await response.json();
   assert.equal(items[0].expiry_date, null);
-  assert.equal(items[1].expiry_date, "2026-11-03");
+  // Known products get the shelf-life table date (fresh milk: 3 days), not the model guess.
+  assert.equal(items[1].expiry_date, "2026-10-30");
 });
