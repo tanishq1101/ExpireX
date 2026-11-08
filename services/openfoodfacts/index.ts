@@ -75,10 +75,12 @@ async function fetchFrom(host: string, barcode: string): Promise<OffProduct | nu
 }
 
 /** Map UPCitemdb's freeform category string to our enum. */
-function mapUpcCategory(cat: string): Category {
-  const t = cat.toLowerCase();
-  if (/health|medicine|pharmacy|drug|supplement/.test(t)) return "medicine";
-  if (/beauty|cosmetic|makeup|fragrance|personal care|skin|hair/.test(t)) return "cosmetics";
+function mapUpcCategory(cat: string, title = ""): Category {
+  const t = `${cat} ${title}`.toLowerCase();
+  // Retail trees file face wash and shampoo under "Health & Beauty", so personal-care words win
+  // over "health"; only clear medicine words make an item a medicine.
+  if (/beauty|cosmetic|makeup|fragrance|personal care|skin|hair|face ?wash|shampoo|soap|lotion|cream|deodorant|toothpaste|oral care|bath|shower/.test(t)) return "cosmetics";
+  if (/medicine|medication|pharmacy|drug|supplement|vitamin|tablet|capsule|syrup|first aid|pain relief/.test(t)) return "medicine";
   if (/food|beverage|grocery|snack|drink|gourmet/.test(t)) return "food";
   return "other";
 }
@@ -105,7 +107,7 @@ async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
     if (!name) return null;
     const size = parseSize(title);
     const catStr = it?.category || "";
-    const category = mapUpcCategory(catStr);
+    const category = mapUpcCategory(catStr, title);
     return {
       found: true,
       barcode,

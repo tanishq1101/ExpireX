@@ -68,3 +68,12 @@ export function composeProductName(name?: string | null, brand?: string | null):
   ) return clean;
   return `${b} ${clean}`;
 }
+
+const PERSONAL_CARE_RE = /\b(face ?wash|facewash|shampoo|conditioner|soap|body ?wash|lotion|moisturi[sz]er|sunscreen|deodorant|toothpaste|lip ?balm|serum|cleanser|hair ?oil|cream)\b/i;
+const MEDICINE_RE = /\b(tablets?|capsules?|syrup|mg|ointment|drops|paracetamol|antibiotic|vitamin)\b/i;
+
+/** Personal-care products that a retail database filed as "medicine" (via "Health & Beauty"). */
+export function correctCategory<C extends string>(name: string, category: C | null): C | "cosmetics" | null {
+  if (category === "medicine" && PERSONAL_CARE_RE.test(name) && !MEDICINE_RE.test(name)) return "cosmetics";
+  return category;
+}

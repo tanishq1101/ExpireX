@@ -5,7 +5,7 @@ import { createAdminClient } from "@/services/supabase/admin";
 import { rateLimit } from "@/lib/rate-limit";
 import { estimateShelfLifeLocal } from "@/lib/shelf-life";
 import { todayKolkata } from "@/lib/dates";
-import { cleanProductName, composeProductName } from "@/lib/product-name";
+import { cleanProductName, composeProductName, correctCategory } from "@/lib/product-name";
 import type { ProductLookup } from "@/lib/validators";
 import type { Category } from "@/types/database";
 
@@ -73,10 +73,10 @@ export async function GET(request: Request) {
         name: cleanProductName(cached.name),
         brand: cached.brand ?? null,
         size: cached.size ?? null,
-        category: (cached.category as Category | null) ?? null,
+        category: correctCategory(cached.name, (cached.category as Category | null) ?? null),
         image_url: cached.image_url ?? null,
         // Gate cached hits too — a non-consumable must still be rejected.
-        supported: isConsumable((cached.category as Category | null) ?? null),
+        supported: isConsumable(correctCategory(cached.name, (cached.category as Category | null) ?? null)),
       }));
     }
 

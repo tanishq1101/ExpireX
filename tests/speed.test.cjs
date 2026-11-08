@@ -106,3 +106,10 @@ test("messy database titles become readable names and the pack size moves to qua
   assert.equal(composeProductName("Amul Butter - 500 g (Pack of 2)", "Amul"), "Amul Butter");
   assert.deepEqual(parseSize("Dove Shampoo 1.5 L"), { quantity: 1.5, unit: "L" });
 });
+
+test("personal-care products filed under Health & Beauty are cosmetics, not medicine", () => {
+  const { correctCategory } = require("../lib/product-name.ts");
+  assert.equal(correctCategory("NiveaIndia Nivea All in 1 Facewash 50 Gram Tube", "medicine"), "cosmetics");
+  assert.equal(correctCategory("Dolo 650 mg Tablets", "medicine"), "medicine");
+  assert.equal(correctCategory("Amul Butter", "food"), "food");
+});
