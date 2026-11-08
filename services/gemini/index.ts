@@ -1,7 +1,6 @@
-import { parseReceiptExtraction, type ReceiptExtraction } from "@/lib/receipt-extraction";
 import "server-only";
 import { isCalendarDate } from "@/lib/calendar-date";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, type GenerationConfig, type ResponseSchema } from "@google/generative-ai";
 import {
   extractionSchema,
   shelfLifeSchema,
@@ -13,10 +12,15 @@ import {
 import { CATEGORIES } from "@/lib/status";
 import { parseOcrText } from "@/lib/ocr-parser";
 
-const MODEL = "gemini-2.5-flash"; // multimodal; reads the label image and extracts in one call
-const IMAGE_TIMEOUT_MS = 18_000; // route allows 60s; leaves room for the offline fallback after a timeout
-const TEXT_TIMEOUT_MS = 12_000;
-
+// Newest fast vision model first; the older model is a separate quota bucket, so a rate limit,
+// outage or retirement of one model falls through to the other instead of to slow offline OCR.
+// Override with GEMINI_MODELS="model-a,model-b" without a code change.
+const MODELS = (process.env.GEMINI_MODELS ?? "gemini-3.5-flash,gemini-2.5-flash")
+  .split(",")
+  .map((m) => m.trim())
+  .filter(Boolean);
+const IMAGE_TIMEOUT_MS = 13_000; // per model attempt; the route still has time for the fallback model
+const TEXT_TIMEOUT_MS = 9_000;
 const RULES = `Return ONLY JSON with exactly these keys:
 - "product_name": string | null   (concise product name, no marketing fluff)
 - "brand": string | null          (maker/brand if printed)
@@ -64,55 +68,103 @@ Rules:
 - For PACKAGED goods (sealed carton, bottle, can, blister, jar) with or without a printed date: set "freshness" and "freshness_note" to null. Never invent a visual freshness verdict for sealed packaging.
 - If a value is unreadable or absent, use null. Never invent a value.`;
 
-// ── Model client + retry ─────────────────────────────────────────────────────
+// ── Model client + fallback chain ───────────────────────────────────────────
 
-function model() {
+type Part = { text: string } | { inlineData: { data: string; mimeType: string } };
+
+function client() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");
-  return new GoogleGenerativeAI(apiKey).getGenerativeModel({
-    model: MODEL,
-    // Reading printed text needs no deliberation; skipping "thinking" roughly halves latency, which
-    // keeps slow mobile scans from timing out into the weaker offline OCR fallback.
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0,
-      maxOutputTokens: 8192,
-      thinkingConfig: { thinkingBudget: 0 },
-      // Printed dates are tiny; spend more image tokens so they survive downscaling.
-      mediaResolution: "MEDIA_RESOLUTION_HIGH",
-    } as Record<string, unknown>,
-  });
+  return new GoogleGenerativeAI(apiKey);
 }
 
-/** True for rate-limit / transient capacity errors worth retrying. */
+/** Reading printed text needs no deliberation: minimal thinking roughly halves latency. */
+function configFor(name: string, schema?: ResponseSchema): Record<string, unknown> {
+  const legacy = /^gemini-[12]\./.test(name);
+  return {
+    responseMimeType: "application/json",
+    ...(schema ? { responseSchema: schema } : {}),
+    // Gemini 3 models are tuned for the default temperature; 2.x reads labels best at 0.
+    ...(legacy ? { temperature: 0 } : {}),
+    maxOutputTokens: 4096,
+    thinkingConfig: legacy ? { thinkingBudget: 0 } : { thinkingLevel: "minimal" },
+    // Printed dates are tiny; spend more image tokens so they survive downscaling.
+    mediaResolution: "MEDIA_RESOLUTION_HIGH",
+  };
+}
+
+/** True for rate-limit / transient capacity errors worth one more try after a pause. */
 function isRetriableGeminiError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as { status?: number; statusCode?: number; message?: string; code?: number | string };
   const status = e.status ?? e.statusCode ?? (typeof e.code === "number" ? e.code : undefined);
   if (status === 429 || status === 503 || status === 500) return true;
   const msg = typeof e.message === "string" ? e.message : String(err);
-  return /429|Too Many|RESOURCE_EXHAUSTED|503|UNAVAILABLE|internal error|deadline/i.test(msg);
+  return /429|Too Many|RESOURCE_EXHAUSTED|503|UNAVAILABLE|internal error|deadline|aborted|timed? ?out/i.test(msg);
 }
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** One bounded retry for transient errors; leave time for the route fallback. */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
+/**
+ * Ask each model in turn. Any failure (quota, outage, timeout, retired model) moves straight on
+ * to the next model; only when every model hit a transient error is the first one retried once.
+ */
+async function generate(
+  request: string | Part[],
+  { timeoutMs, schema, models = MODELS }: { timeoutMs: number; schema?: ResponseSchema; models?: string[] }
+): Promise<string> {
+  if (!models.length) throw new Error("No Gemini model configured");
+  const ai = client();
+  const attempt = async (name: string) => {
+    const result = await ai
+      .getGenerativeModel({ model: name, generationConfig: configFor(name, schema) as GenerationConfig })
+      .generateContent(request as Part[], { timeout: timeoutMs });
+    const text = result.response.text();
+    if (!text.trim()) throw new Error("Empty model response");
+    return text;
+  };
   let last: unknown;
-  for (let i = 0; i < attempts; i++) {
+  let allTransient = true;
+  for (const name of models) {
     try {
-      return await fn();
+      return await attempt(name);
     } catch (err) {
       last = err;
-      if (!isRetriableGeminiError(err) || i === attempts - 1) throw err;
-      // 600ms, 1200ms (+ small jitter) before 2nd / 3rd try
-      await sleep(600 * 2 ** i + Math.floor(Math.random() * 200));
+      if (!isRetriableGeminiError(err)) allTransient = false;
     }
+  }
+  if (allTransient) {
+    await sleep(700 + Math.floor(Math.random() * 300));
+    return attempt(models[0]);
   }
   throw last;
 }
+
+// Structured output: the API itself enforces this shape, so a freelanced answer can no longer
+// break a scan. Sanitizers below still validate every value before it is trusted.
+const str = { type: SchemaType.STRING, nullable: true } as const;
+const EXTRACTION_SCHEMA: ResponseSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    product_name: str,
+    brand: str,
+    expiry_date: str,
+    manufacture_date: str,
+    expiry_text: str,
+    manufacture_text: str,
+    category: { type: SchemaType.STRING, nullable: true, format: "enum", enum: [...CATEGORIES] },
+    quantity: { type: SchemaType.NUMBER, nullable: true },
+    unit: str,
+    item_type: { type: SchemaType.STRING, format: "enum", enum: ["food", "cosmetics", "medicine", "unsupported"] },
+    detected: str,
+    estimated: { type: SchemaType.BOOLEAN, nullable: true },
+    freshness: { type: SchemaType.STRING, nullable: true, format: "enum", enum: ["fresh", "use_soon", "spoiled"] },
+    freshness_note: str,
+  },
+  required: ["product_name", "expiry_date", "expiry_text", "manufacture_date", "category", "item_type"],
+};
 
 // ── Sanitizers (coerce freelanced model JSON into something Zod can keep) ────
 
@@ -297,13 +349,12 @@ export async function geminiExtractFromImage(
   const prompt = `You read a photo of a product label and extract structured data.
 Today's date is ${today} (Asia/Kolkata).
 ${RULES}`;
-  const result = await withRetry(() =>
-    model().generateContent([
-      { text: prompt },
-      { inlineData: { data: imageBase64, mimeType } },
-    ], { timeout: IMAGE_TIMEOUT_MS })
+  return parse(
+    await generate([{ text: prompt }, { inlineData: { data: imageBase64, mimeType } }], {
+      timeoutMs: IMAGE_TIMEOUT_MS,
+      schema: EXTRACTION_SCHEMA,
+    })
   );
-  return parse(result.response.text());
 }
 
 /**
@@ -327,13 +378,14 @@ Return ONLY JSON: { "dates": [ { "label": string, "text": string } ], "shelf_lif
 - "shelf_life": a printed relative statement such as "Best before 6 months from date of manufacture", else null.
 Ignore batch/lot numbers, prices, MRP, barcodes and phone numbers. If there is no date at all, return { "dates": [], "shelf_life": null }.`;
   const none = { expiry_date: null, manufacture_date: null, expiry_text: null, manufacture_text: null };
-  const result = await model().generateContent(
-    [{ text: prompt }, { inlineData: { data: imageBase64, mimeType } }],
-    { timeout: timeoutMs }
-  );
+  // One model only: this is an optional extra pass and must not double the wait.
+  const text = await generate([{ text: prompt }, { inlineData: { data: imageBase64, mimeType } }], {
+    timeoutMs,
+    models: MODELS.slice(0, 1),
+  });
   let parsed: unknown;
   try {
-    parsed = JSON.parse(result.response.text());
+    parsed = JSON.parse(text);
   } catch {
     return none;
   }
@@ -365,7 +417,7 @@ export async function geminiEstimateShelfLife(
   productName: string,
   category: string,
   baseDate: string,
-  context: { storage?: "pantry" | "fridge" | "freezer" | null; reference?: string | null } = {}
+  context: { storage?: "pantry" | "fridge" | "freezer" | null; reference?: string | null; references?: string | null } = {}
 ): Promise<ShelfLife> {
   const where =
     context.storage === "freezer" ? "in the freezer"
@@ -379,7 +431,9 @@ Product: ${JSON.stringify(productName.slice(0, 200))}
 Category: ${category}
 Base date (manufacture or purchase): ${baseDate} (Asia/Kolkata)
 Stored: ${where}
-${context.reference ? `Reference from our shelf-life table: "${context.reference}" Use it unless this specific product is clearly different (e.g. a packaged, preservative-added or UHT version).\n` : ""}
+${context.reference ? `Closest match in our shelf-life table: "${context.reference}" Use it unless this specific product is clearly different (e.g. a packaged, preservative-added or UHT version).\n` : ""}${context.references ? `Reference entries retrieved from our curated shelf-life table (unopened, typical Indian household):
+${context.references}
+Base your estimate on the entry that describes the SAME KIND of product, adjusting only for clear differences (sealed/UHT/canned/dried versions keep longer). If none is the same kind of product, ignore them and use your own knowledge. In "basis", name what you compared it to.\n` : ""}
 Return ONLY JSON with exactly these keys:
 - "expiry_date": string | null  (ISO "YYYY-MM-DD"; base date + a typical unopened shelf life)
 - "confidence": "high" | "medium" | "low" | null
@@ -396,37 +450,7 @@ Rules:
 - For documents/warranty/subscription where a shelf life is meaningless, return null expiry/confidence.
 - Tips: at most TWO items. Genuinely useful (e.g. "Refrigerate after opening", "Best consumed within 48h").
 - Never return a date before the base date. Be realistic, not optimistic.`;
-  const result = await withRetry(() => model().generateContent(prompt, { timeout: TEXT_TIMEOUT_MS }));
-  return parseShelfLife(result.response.text());
-}
-
-/** Read a receipt photo and return many line items, each with an estimated expiry. */
-export async function geminiExtractReceipt(
-  imageBase64: string,
-  mimeType: string,
-  today: string
-): Promise<ReceiptExtraction> {
-  const prompt = `You read a photo of a shopping receipt and list the purchasable products on it.
-Today's date is ${today} (Asia/Kolkata). Use the receipt/purchase date if visible, else today, as the base date.
-
-Return ONLY JSON: { "items": [ { "name", "category", "expiry_date", "quantity" }, ... ] }
-For each item:
-- "name": string  (clean product name; drop prices, codes, taxes, totals, store name)
-- "category": one of [${CATEGORIES.join(", ")}] | null
-- "expiry_date": string | null  (ISO "YYYY-MM-DD"; ESTIMATE base date + typical unopened shelf life)
-- "quantity": number | null
-
-Rules:
-- Skip non-product lines (subtotal, GST, change, card, store info).
-- Perishables get short shelf lives (days); packaged/canned get months.
-- If you can't estimate an expiry, use null. Never invent product names.`;
-  const result = await withRetry(() =>
-    model().generateContent([
-      { text: prompt },
-      { inlineData: { data: imageBase64, mimeType } },
-    ], { timeout: IMAGE_TIMEOUT_MS })
-  );
-  return parseReceiptExtraction(result.response.text());
+  return parseShelfLife(await generate(prompt, { timeoutMs: TEXT_TIMEOUT_MS }));
 }
 
 /** Fallback path: extract from OCR text (used when image extraction fails, after Tesseract). */
@@ -439,6 +463,5 @@ OCR TEXT:
 """
 ${rawText.slice(0, 4000)}
 """`;
-  const result = await withRetry(() => model().generateContent(prompt, { timeout: TEXT_TIMEOUT_MS }));
-  return parse(result.response.text());
+  return parse(await generate(prompt, { timeoutMs: TEXT_TIMEOUT_MS, schema: EXTRACTION_SCHEMA }));
 }

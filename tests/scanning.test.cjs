@@ -2,7 +2,6 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { parseOcrText } = require("../lib/ocr-parser.ts");
 const { itemFormSchema } = require("../lib/validators.ts");
-const { prepareReceiptRows } = require("../lib/receipt-review.ts");
 const today = "2026-10-25";
 
 for (const [label, expected] of [
@@ -64,22 +63,6 @@ test("form rejects calendar rollovers and accepts leap days", () => {
 });
 
 const row = { name: "Milk", category: "food", expiry: "2027-02-28", qty: "1" };
-test("receipt validates a complete batch and attaches the current user", () => {
-  const result = prepareReceiptRows([row, { ...row, name: "Bread", qty: "2" }], "test-user");
-  assert.deepEqual(result.errors, {});
-  assert.equal(result.valid.length, 2);
-  assert.equal(result.valid[1].user_id, "test-user");
-  assert.equal(result.valid[1].quantity, 2);
-});
-test("receipt returns no partial batch for missing dates, names, or invalid quantities", () => {
-  for (const invalid of [{ expiry: "" }, { name: "" }, { qty: "-1" }, { expiry: "2027-02-30" }]) {
-    const result = prepareReceiptRows([row, { ...row, ...invalid }], "test-user");
-    assert.equal(result.valid.length, 0);
-    assert.equal(Object.keys(result.errors).length, 1);
-    assert.ok(result.errors[1]);
-  }
-});
-
 test("manufacture MM/YY stays a manufacture date", () => {
   const result = parseOcrText("Cream\nMFG 03/26 EXP 03/28", today);
   assert.equal(result.manufacture_date, "2026-03-31");

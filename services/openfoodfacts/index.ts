@@ -62,7 +62,7 @@ async function fetchFrom(host: string, barcode: string): Promise<OffProduct | nu
     const res = await fetch(url, {
       headers: { "User-Agent": UA, Accept: "application/json" },
       // Tighter timeout so one slow DB can't stall the scan.
-      signal: AbortSignal.timeout(4500),
+      signal: AbortSignal.timeout(3800),
     });
     if (!res.ok) return null;
     const json = (await res.json()) as { status?: number; product?: OffProduct };
@@ -92,7 +92,7 @@ async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
   try {
     const res = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(barcode)}`, {
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(4500),
+      signal: AbortSignal.timeout(3800),
     });
     if (!res.ok) return null;
     const json = (await res.json()) as {
@@ -120,20 +120,68 @@ async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
   }
 }
 
-/** Resolve a barcode to product identity. Dates/price are NEVER sourced here. */
-export async function lookupBarcode(barcode: string): Promise<ProductLookup> {
+const NOT_FOUND = (barcode: string): ProductLookup => ({
+  found: false, barcode, name: null, brand: null, size: null, category: null, image_url: null,
+});
+
+// Unknown barcodes are re-checked at most every few hours per server instance, so a repeat scan
+// of an unlisted product answers at once instead of waiting on every database again.
+const MISS_TTL_MS = 6 * 60 * 60 * 1000;
+const misses = new Map<string, number>();
+function rememberMiss(barcode: string) {
+  if (misses.size > 2000) misses.delete(misses.keys().next().value as string);
+  misses.set(barcode, Date.now());
+}
+
+/**
+ * Resolve a barcode to product identity. Dates/price are NEVER sourced here.
+ * All databases are asked at once and the answer is returned as soon as it is known: a hit from
+ * the richest source that has answered, without waiting for slower sources that can only tie.
+ */
+export async function lookupBarcode(barcode: string, { budgetMs = 4000 } = {}): Promise<ProductLookup> {
   const clean = barcode.replace(/\s+/g, "");
-  // Query all databases IN PARALLEL, then pick the first hit by priority:
-  // Open Food / Beauty / Products Facts first (richest data), then UPCitemdb (widest coverage).
-  const settled = await Promise.all([
+  const missedAt = misses.get(clean);
+  if (missedAt && Date.now() - missedAt < MISS_TTL_MS) return NOT_FOUND(clean);
+
+  // Priority order: Open Food / Beauty / Pet / Products Facts (richest data), then UPCitemdb.
+  const tasks: Promise<ProductLookup | null>[] = [
     ...SOURCES.map(async ({ host, category }) => {
       const p = await fetchFrom(host, clean);
       return p ? toResult(clean, category, p) : null;
     }),
     fetchUpcItemDb(clean),
-  ]);
-  const hit = settled.find((r): r is ProductLookup => r !== null);
-  return (
-    hit ?? { found: false, barcode: clean, name: null, brand: null, size: null, category: null, image_url: null }
-  );
+  ];
+
+  return new Promise<ProductLookup>((resolve) => {
+    const results: (ProductLookup | null | undefined)[] = tasks.map(() => undefined);
+    let settled = false;
+    let grace: ReturnType<typeof setTimeout> | undefined;
+    const finish = (value: ProductLookup | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(budget);
+      clearTimeout(grace);
+      if (!value) rememberMiss(clean);
+      resolve(value ?? NOT_FOUND(clean));
+    };
+    const best = () => results.find((r): r is ProductLookup => !!r) ?? null;
+    const check = () => {
+      for (const r of results) {
+        if (r === undefined) {
+          // A lower-priority hit waits briefly for a richer source, never for a slow one.
+          if (best() && !grace) grace = setTimeout(() => finish(best()), 700);
+          return;
+        }
+        if (r) return finish(r);
+      }
+      finish(null);
+    };
+    const budget = setTimeout(() => finish(best()), budgetMs);
+    tasks.forEach((task, i) =>
+      task.then(
+        (r) => { results[i] = r; check(); },
+        () => { results[i] = null; check(); }
+      )
+    );
+  });
 }

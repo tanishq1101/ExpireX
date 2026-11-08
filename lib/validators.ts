@@ -75,20 +75,6 @@ export function emptyExtraction(): Extraction {
   return { product_name: null, expiry_date: null, category: null };
 }
 
-// One line item parsed from a receipt photo. Receipts rarely print expiry dates, so the
-// model estimates a likely expiry from the purchase date + typical shelf life.
-export const receiptItemSchema = z.object({
-  name: z.string().min(1).max(200),
-  category: categorySchema.nullable(),
-  expiry_date: dateString.nullable(),
-  quantity: z.number().nonnegative().nullable(),
-});
-export type ReceiptItem = z.infer<typeof receiptItemSchema>;
-
-export const receiptSchema = z.object({
-  items: z.array(receiptItemSchema).max(50),
-});
-
 // Shape Gemini must return for an AI shelf-life estimate (used when no printed date is read).
 // tips: preprocess slices to 3 — models often return 4 and used to fail the whole estimate.
 export const shelfLifeSchema = z.object({
@@ -130,4 +116,6 @@ export type ProductLookup = {
   supported?: boolean;
   // Product-database category tags, used only as shelf-life hints.
   tags?: string[];
+  // A confident shelf-life estimate computed with the lookup, so no second request is needed.
+  estimate?: Pick<ShelfLife, "expiry_date" | "confidence" | "basis" | "tips">;
 };

@@ -5,8 +5,10 @@ import { createClient } from "@/services/supabase/server";
 import { todayKolkata, relativeLabel } from "@/lib/dates";
 import { getStatus, STATUS_META } from "@/lib/status";
 import { cn, externalImageUrl } from "@/lib/utils";
-import { ItemForm } from "@/components/item-form";
+import { DeferredItemForm as ItemForm } from "@/components/deferred-item-form";
 import { DeleteItemButton } from "@/components/delete-item-button";
+import { ItemQuickActions } from "@/components/item-quick-actions";
+import { openedDaysFor } from "@/lib/shelf-life";
 import { CategoryTile } from "@/components/category-chip";
 import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/database";
@@ -48,6 +50,8 @@ export default async function EditItemPage({ params }: { params: Promise<{ id: s
         </div>
         <Badge className={cn(STATUS_META[status].tone)}>{STATUS_META[status].label}</Badge>
       </div>
+
+      <ItemQuickActions item={item} openDays={item.open_within_days ?? openedDaysFor(item.name, item.category)} />
 
       <div className="flex flex-wrap gap-3 text-sm">
         <Link className="inline-flex min-h-11 items-center rounded-xl border border-border px-3" href={`/items/new?batch=${item.id}`}>Add another batch</Link>

@@ -1,35 +1,30 @@
 import { redirect } from "next/navigation";
-import { auth, currentUser } from "@clerk/nextjs/server";
-import { createAdminClient } from "@/services/supabase/admin";
+import { auth } from "@clerk/nextjs/server";
 import type { Metadata } from "next";
-export const metadata: Metadata = { robots: { index: false, follow: false } };
-
 import { AppNav } from "@/components/app-nav";
-import { sendWelcomeEmail } from "@/lib/email";
+import { getAccount } from "@/lib/account";
+
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth();
   if (!userId) redirect("/login");
 
-  const user = await currentUser();
-  const primary = user?.primaryEmailAddress;
-  const email = primary?.verification?.status === "verified" ? primary.emailAddress : undefined;
-  let syncFailed = false;
-  if (user) {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase.rpc("sync_account", { p_user_id: userId, p_email: email ?? "", p_updated_at: user.updatedAt });
-    syncFailed = !!error || data !== true;
-    if (!syncFailed && email) {
-      // Await completion: serverless runtimes can stop unawaited network work.
-      try { await sendWelcomeEmail(userId, email, user?.firstName ?? undefined); }
-      catch { console.error("Welcome email delivery failed; inspect notification_deliveries."); }
-    }
-  }
+  const { email, synced } = await getAccount(userId);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-[calc(1.25rem+env(safe-area-inset-top))] sm:pb-10">
-      <AppNav email={email ?? ""} />
-      <main className="flex-1">{(syncFailed || !email) && <p role="alert" className="mb-4 rounded-xl border border-danger/40 p-3 text-sm text-danger">{syncFailed ? "Account sync failed. Reload before adding items; email reminders may be unavailable." : "Verify your primary email address in your account to receive reminders."}</p>}{children}</main>
+      <AppNav email={email} />
+      <main className="flex-1">
+        {(!synced || !email) && (
+          <p role="alert" className="mb-4 rounded-xl border border-danger/40 p-3 text-sm text-danger">
+            {!synced
+              ? "Account sync failed. Reload before adding items; email reminders may be unavailable."
+              : "Verify your primary email address in your account to receive reminders."}
+          </p>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

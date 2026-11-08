@@ -1,6 +1,6 @@
 # Expire X
 
-Expiry tracking with Clerk authentication, Supabase RLS, label/receipt extraction, shopping suggestions, private images, CSV export, email reminders and browser push. Next.js 15 / React 19. Node 22+ recommended.
+Expiry tracking with Clerk authentication, Supabase RLS, label and barcode scanning, shopping list, private images, CSV export, email reminders and browser push. Next.js 15 / React 19. Node 22+ recommended. Server functions run in Mumbai (`bom1`, see `vercel.json`) next to the Supabase database.
 
 ## Local development
 
@@ -17,7 +17,7 @@ The server requires `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
 
 Optional features:
 
-- `GEMINI_API_KEY`: image/receipt extraction and shelf-life estimates. Label fallback OCR runs on the server using bundled Tesseract language data; both paths need an internet connection from the browser. Label extraction never fills an unreadable printed date with an estimate. Medicine estimates are disabled.
+- `GEMINI_API_KEY`: label reading and shelf-life estimates. `GEMINI_MODELS` (optional, comma-separated, default `gemini-3.5-flash,gemini-2.5-flash`) sets the model fallback order; each model has its own quota, so a rate limit on one falls through to the next. Estimates for products the built-in shelf-life table can't place are grounded in the closest table entries (retrieval-augmented). Label fallback OCR runs on the server using bundled Tesseract language data; both paths need an internet connection from the browser. Label extraction never fills an unreadable printed date with an estimate. Medicine estimates are disabled.
 - `RESEND_API_KEY` and `RESEND_FROM`: Next.js welcome email. Set the same keys in Supabase function secrets for reminders/digests.
 - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`: browser push. The public key must match the private key; generate them with `npx web-push generate-vapid-keys` using the installed CLI.
 - `CRON_SECRET`: long random shared secret in Next.js and function secrets. Do not commit the real value in SQL templates.
@@ -76,7 +76,7 @@ Vercel runs `/api/push/run` daily using `Authorization: Bearer <CRON_SECRET>`. T
 - **Needs attention:** Today / Next 7 days / Overdue, ahead of the dashboard scanner. Links preserve the corresponding inventory filter and export.
 - **Add another batch:** available from an item or repeated barcode. Copies product identity/location, clears batch dates/opened state, and saves separately. Private photos are not shared between independently deletable batches.
 - **Calendar reminder:** a per-item `.ics` download for documents, warranties and subscriptions, with a stable UID, revision sequence, an all-day expiry event and a one-day alarm. Downloads are snapshots. Calendar import/update behavior depends on the user's calendar.
-- Saved date source remains visible in inventory and reminders. Receipt review reports omitted extraction rows and requires acknowledgement. Uploaded private images use 15-minute signed previews without changing stored paths.
+- Saved date source remains visible in inventory and reminders. Uploaded private images use 15-minute signed previews without changing stored paths.
 
 ## Account deletion
 

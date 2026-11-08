@@ -100,6 +100,51 @@ export function matchShelfLife(name: string, category?: Category | null, hints: 
   return byName;
 }
 
+// ── Retrieval for AI grounding (RAG) ─────────────────────────────────────────
+// When no entry matches confidently, the closest few entries are retrieved by weighted word
+// overlap and handed to the model as reference facts, so its estimate is anchored to the
+// curated table instead of free recall. Lexical retrieval is enough for ~230 short entries
+// and needs no embedding calls (which would spend the same rate-limited AI quota).
+
+const stem = (w: string) => (w.length > 4 && w.endsWith("es") ? w.slice(0, -2) : w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w);
+const tokens = (text: string) => normalizeProductName(text).split(" ").filter((w) => w.length > 1).map(stem);
+
+const ROW_TOKENS = INDEX.map(({ row }) => new Set(row[0].split("|").flatMap(tokens)));
+const DOC_FREQ = new Map<string, number>();
+for (const set of ROW_TOKENS) for (const t of set) DOC_FREQ.set(t, (DOC_FREQ.get(t) ?? 0) + 1);
+const idf = (t: string) => Math.log(1 + INDEX.length / (DOC_FREQ.get(t) ?? INDEX.length));
+
+export type RetrievedShelfLife = { row: ShelfRow; score: number };
+
+/** Top-k dataset entries that share the most informative words with the product. */
+export function retrieveShelfLife(name: string, category?: Category | null, hints: string[] = [], k = 5): RetrievedShelfLife[] {
+  const nameTokens = tokens(name);
+  const hintTokens = hints.slice(0, 30).flatMap((h) => tokens(h.replace(/^[a-z]{2}:/i, "").replace(/-/g, " ")));
+  if (!nameTokens.length && !hintTokens.length) return [];
+  const scored: RetrievedShelfLife[] = [];
+  INDEX.forEach(({ row }, i) => {
+    if (category && category !== "other" && row[1] !== category) return;
+    let score = 0;
+    nameTokens.forEach((t, pos) => {
+      // Later words are usually the head noun ("potato chips" is chips): weight them up.
+      if (ROW_TOKENS[i].has(t)) score += idf(t) * (1 + pos / Math.max(1, nameTokens.length));
+    });
+    for (const t of new Set(hintTokens)) if (ROW_TOKENS[i].has(t)) score += idf(t) * 0.5;
+    if (score > 0) scored.push({ row, score });
+  });
+  return scored.sort((a, b) => b.score - a.score).slice(0, k);
+}
+
+const fmtDays = (d: number | null) => (d == null ? "not suitable" : d === 0 ? "same day" : `${d} days`);
+
+/** Plain-text reference lines for the model prompt. */
+export function describeShelfRows(rows: RetrievedShelfLife[]): string {
+  return rows
+    .map(({ row: [, cat, pantry, fridge, freezer, opened, label] }) =>
+      `- ${label} (${cat}): cupboard ${fmtDays(pantry)}, fridge ${fmtDays(fridge)}, freezer ${fmtDays(freezer)}${opened != null ? `, once opened ${opened} days` : ""}`)
+    .join("\n");
+}
+
 /** Read a free-text storage location ("Kitchen fridge", "Deep freezer", "Medicine box"). */
 export function storageFromLocation(location?: string | null, name?: string | null): Storage | null {
   const loc = (location ?? "").toLowerCase();

@@ -11,7 +11,6 @@ import {
   Sun,
   Bell,
   BellOff,
-  Sliders,
   HelpCircle,
   ShieldCheck,
   LogOut,
@@ -143,12 +142,9 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
   const [open, setOpen] = React.useState(false);
   const [closing, setClosing] = React.useState(false);
   const [panel, setPanel] = React.useState<"main" | "settings">("main");
-  const [advancedOpen, setAdvancedOpen] = React.useState(false);
-  const [compact, setCompact] = React.useState(false);
 
   /* General Settings state */
   const [defaultCategory, setDefaultCategory] = React.useState<Category>("food");
-  const [ocrEngine, setOcrEngine] = React.useState<"ai" | "tesseract">("ai");
   const [emailReminders, setEmailReminders] = React.useState(true);
   const [emailRemindersBusy, setEmailRemindersBusy] = React.useState(false);
   const [settingsLoaded, setSettingsLoaded] = React.useState(false);
@@ -160,26 +156,12 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
   const { user } = useUser();
   const supabase = useSupabaseClient();
 
-  /* Compact mode: read from DOM on mount */
-  React.useEffect(() => {
-    setCompact(document.documentElement.classList.contains("compact"));
-  }, []);
-
-  const toggleCompact = React.useCallback(() => {
-    const next = !compact;
-    setCompact(next);
-    document.documentElement.classList.toggle("compact", next);
-    try { localStorage.setItem("compact", next ? "1" : "0"); } catch { /* ignore */ }
-  }, [compact]);
-
   /* Load General Settings when sub-panel opens */
   React.useEffect(() => {
     if (panel !== "settings") return;
     try {
       const saved = localStorage.getItem("defaultCategory") as Category | null;
       if (saved) setDefaultCategory(saved);
-      const eng = localStorage.getItem("ocrEngine");
-      if (eng === "tesseract" || eng === "ai") setOcrEngine(eng);
     } catch { /* ignore */ }
 
     if (user?.id && !settingsLoaded) {
@@ -198,11 +180,6 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
   const changeDefaultCategory = (cat: Category) => {
     setDefaultCategory(cat);
     try { localStorage.setItem("defaultCategory", cat); } catch { /* ignore */ }
-  };
-
-  const changeOcrEngine = (eng: "ai" | "tesseract") => {
-    setOcrEngine(eng);
-    try { localStorage.setItem("ocrEngine", eng); } catch { /* ignore */ }
   };
 
   const toggleEmailReminders = async () => {
@@ -378,21 +355,6 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                     />
                   )}
 
-                  {/* Compact view */}
-                  <DrawerRow
-                    icon={Sliders}
-                    label="Compact View"
-                    trailing={
-                      <ToggleSwitch
-                        checked={compact}
-                        onChange={toggleCompact}
-                        label="Toggle compact view"
-                      />
-                    }
-                  >
-                    <span className="text-[11px] text-muted">Smaller item rows</span>
-                  </DrawerRow>
-
                   <Divider />
 
                   <SectionLabel>Information</SectionLabel>
@@ -440,40 +402,6 @@ export function SettingsDrawer({ variant, onSignOut }: SettingsDrawerProps) {
                       )}
                     </Select>
                   </div>
-
-                  {/* Advanced: most people never need to change how labels are read. */}
-                  <button
-                    type="button"
-                    aria-expanded={advancedOpen}
-                    onClick={() => setAdvancedOpen((v) => !v)}
-                    className="mb-1 flex min-h-11 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-medium text-muted transition hover:bg-surface/[0.06]"
-                  >
-                    Advanced
-                    <ChevronRight className={cn("h-4 w-4 text-muted/60 transition-transform", advancedOpen && "rotate-90")} />
-                  </button>
-                  {advancedOpen && (
-                  <div className="mb-1 rounded-xl px-3 py-3">
-                    <div className="mb-2 flex items-center gap-3">
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface/[0.06] text-primary">
-                        <Sliders className="h-4 w-4" />
-                      </span>
-                      <div>
-                        <div className="text-sm font-medium text-foreground">Scan engine</div>
-                        <div className="text-[11px] text-muted">
-                          AI vision or server OCR fallback; both require a connection
-                        </div>
-                      </div>
-                    </div>
-                    <Select
-                      value={ocrEngine}
-                      onChange={(e) => changeOcrEngine(e.target.value as "ai" | "tesseract")}
-                      className="text-sm"
-                    >
-                      <option value="ai">AI vision (recommended)</option>
-                      <option value="tesseract">Tesseract OCR (server)</option>
-                    </Select>
-                  </div>
-                  )}
 
                   {/* Email reminders */}
                   <DrawerRow

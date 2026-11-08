@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, ScanBarcode, Package } from "lucide-react";
 import { useSupabaseClient } from "@/services/supabase/client";
-import { relativeLabel, todayKolkata } from "@/lib/dates";
+import { addDays, daysBetween, formatDate, relativeLabel, todayKolkata } from "@/lib/dates";
 import type { ProductLookup, ShelfLife, Extraction } from "@/lib/validators";
 import { fetchJson } from "@/lib/fetch-json";
 import { anotherBatch } from "@/lib/batch";
@@ -17,7 +17,14 @@ import { ScanRejected } from "@/components/scan-rejected";
 import { ProductAnalysisCard, type Analysis } from "@/components/product-analysis-card";
 import { Button } from "@/components/ui/button";
 
-type Existing = Pick<Item, "id" | "name" | "category" | "quantity" | "unit" | "expiry_date" | "location" | "image_url">;
+type Existing = Pick<Item, "id" | "name" | "category" | "quantity" | "unit" | "expiry_date" | "location" | "image_url" | "created_at" | "expiry_source">;
+
+/** Days the previous batch was good for (added → expiry), when that is a sensible number. */
+function lastShelfLife(row: Existing): number | null {
+  if (!row.created_at || !row.expiry_date || row.expiry_source === "unknown") return null;
+  const days = daysBetween(row.created_at.slice(0, 10), row.expiry_date);
+  return days >= 1 && days <= 5 * 365 ? days : null;
+}
 
 export function BarcodeAdd({
   onResolved,
@@ -40,44 +47,40 @@ export function BarcodeAdd({
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
 
-  // Kick off the AI expiry estimate in the background and stream it into the card.
+  /** Put an expiry estimate into the card and the form prefill. */
+  function applyEstimate(est: Pick<ShelfLife, "expiry_date" | "confidence" | "basis" | "tips">) {
+    setAnalysis((prev) =>
+      prev
+        ? { ...prev, expiryDate: est.expiry_date ?? null, confidence: est.confidence ?? null, tips: est.tips ?? null, basis: est.basis ?? null, estimating: false }
+        : prev
+    );
+    setPending((prev) => {
+      if (!prev) return prev;
+      const initial = { ...prev.initial };
+      let notice: string;
+      if (est.expiry_date) {
+        initial.expiry_date = est.expiry_date;
+        initial.expiry_source = "estimated";
+        notice = `We found "${initial.name}". The expiry below is a typical estimate${
+          est.basis ? ` (${est.basis})` : ""
+        }. If a date is printed on the pack, use that instead.`;
+      } else {
+        notice = `We found "${initial.name}". Now add the expiry date printed on the pack.`;
+      }
+      return { initial, notice };
+    });
+  }
+
+  // Only products our shelf-life guide can't place need the slower server estimate.
   function runEstimate(name: string, category: string, hints: string[] = []) {
     fetchJson<ShelfLife & { basis?: string | null }>("/api/estimate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, category, hints }),
     })
-      .then((est) => {
-        setAnalysis((prev) =>
-          prev
-            ? {
-                ...prev,
-                expiryDate: est.expiry_date ?? null,
-                confidence: est.confidence ?? null,
-                tips: est.tips ?? null,
-                basis: est.basis ?? null,
-                estimating: false,
-              }
-            : prev
-        );
-        setPending((prev) => {
-          if (!prev) return prev;
-          const initial = { ...prev.initial };
-          let notice: string;
-          if (est.expiry_date) {
-            initial.expiry_date = est.expiry_date;
-            initial.expiry_source = "estimated";
-            notice = `We found "${initial.name}". The expiry below is a typical estimate${
-              est.basis ? ` (${est.basis})` : ""
-            }. If a date is printed on the pack, use that instead.`;
-          } else {
-            notice = `We found "${initial.name}". Now add the expiry date printed on the pack.`;
-          }
-          return { initial, notice };
-        });
-      })
+      .then((est) => { if (alive.current) applyEstimate(est); })
       .catch(() => {
-        setAnalysis((prev) => (prev ? { ...prev, estimating: false } : prev));
+        if (alive.current) setAnalysis((prev) => (prev ? { ...prev, estimating: false } : prev));
       });
   }
 
@@ -93,7 +96,7 @@ export function BarcodeAdd({
         fetchJson<ProductLookup>(`/api/lookup?barcode=${encodeURIComponent(barcode)}`),
         supabase
           .from("items")
-          .select("id,name,category,quantity,unit,expiry_date,location,image_url")
+          .select("id,name,category,quantity,unit,expiry_date,location,image_url,created_at,expiry_source")
           .eq("barcode", barcode)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -130,13 +133,18 @@ export function BarcodeAdd({
       if (product.image_url) initial.image_url = product.image_url;
     }
 
-    // Already in inventory → offer +1 (the form can estimate if they add as new).
+    // Already in inventory → offer a new batch, pre-dated by how long the last one lasted.
     if (existingRow) {
       setExisting(existingRow);
-      setPending({
-        initial: { ...anotherBatch(existingRow), ...initial, name: initial.name || existingRow.name, category: initial.category ?? existingRow.category },
-        notice: product.found ? `Identified "${initial.name}" by barcode.` : `Barcode ${barcode} saved.`,
-      });
+      const next: ItemFormInitial = { ...anotherBatch(existingRow), ...initial, name: initial.name || existingRow.name, category: initial.category ?? existingRow.category };
+      const lasted = lastShelfLife(existingRow);
+      let notice = product.found ? `Identified "${next.name}" by barcode.` : `Barcode ${barcode} saved.`;
+      if (lasted && next.category !== "medicine") {
+        next.expiry_date = addDays(todayKolkata(), lasted);
+        next.expiry_source = "estimated";
+        notice = `Your last one was good for about ${lasted} days, so we suggested ${formatDate(next.expiry_date)}. If a date is printed on this pack, use that instead.`;
+      }
+      setPending({ initial: next, notice });
       setStep("exists");
       setBusy(false);
       return;
@@ -166,7 +174,9 @@ export function BarcodeAdd({
     setStep("analysis");
     setBusy(false);
     toast.success("Product identified");
-    runEstimate(initial.name ?? "", initial.category ?? "other", product.tags ?? []);
+    if (product.estimate?.expiry_date) applyEstimate(product.estimate);
+    else if (initial.category !== "medicine") runEstimate(initial.name ?? "", initial.category ?? "other", product.tags ?? []);
+    else setAnalysis((prev) => (prev ? { ...prev, estimating: false } : prev));
   }
 
   if (step === "looking" || busy) {
@@ -207,7 +217,14 @@ export function BarcodeAdd({
             </p>
           </div>
         </div>
-        <p className="text-sm text-muted">You already track this product. Add this one as a new batch with its own expiry date — the existing one stays as it is.</p>
+        <p className="text-sm text-muted">
+          You already track this product. Add this one as a new batch with its own expiry date — the existing one stays as it is.
+          {pending.initial.expiry_date && (
+            <span className="mt-1 block text-foreground">
+              Suggested expiry: <strong>{formatDate(pending.initial.expiry_date)}</strong> (based on your last one).
+            </span>
+          )}
+        </p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button
             className="flex-1"

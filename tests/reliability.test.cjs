@@ -5,7 +5,6 @@ const { runReminders, runDigest } = require('../supabase/functions/_shared/remin
 const { edgeHandler } = require('../supabase/functions/_shared/edge-handler.ts');
 const { itemCalendar } = require('../lib/calendar.ts');
 const { anotherBatch } = require('../lib/batch.ts');
-const { parseReceiptExtraction } = require('../lib/receipt-extraction.ts');
 const { readJson } = require('../lib/request-body.ts');
 const { subscriptionSchema } = require('../lib/push-subscription.ts');
 
@@ -114,13 +113,6 @@ test('new batches omit old dates, IDs, private photos and opened windows',()=>{
   assert.equal(batch.name,'Milk');assert.equal(batch.location,'Fridge');assert.equal(batch.expiry_source,'manual');
   for(const key of ['id','expiry_date','opened_date','manufacture_date','open_within_days']) assert.equal(batch[key],undefined);
   assert.equal(batch.image_url,null);
-});
-test('receipt extraction reports dropped/excess rows and retains invalid dates for manual completion',()=>{
-  const row={name:'Milk',category:'food',expiry_date:'2026-02-30',quantity:1};
-  const result=parseReceiptExtraction(JSON.stringify({items:[null,{},...Array(51).fill(row)]}));
-  assert.equal(result.items.length,50);assert.equal(result.omitted_count,3);assert.equal(result.detected_count,53);
-  assert.equal(result.items[0].expiry_date,null);assert.equal(result.warnings.length,1);
-  assert.throws(()=>parseReceiptExtraction('x'.repeat(100001)),/too large/);
 });
 test('chunked JSON without Content-Length cannot bypass the request limit',async()=>{
   await assert.rejects(readJson(new Request('http://localhost',{method:'POST',body:JSON.stringify({name:'x'.repeat(100)})}),20),/too large/);

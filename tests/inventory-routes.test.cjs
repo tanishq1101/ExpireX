@@ -8,7 +8,7 @@ const csv = require("../lib/csv.ts");
 const validators = require("../lib/validators.ts");
 const shelfLife = require("../lib/shelf-life.ts");
 
-const state = { userId: "test-user", limited: false, count: 0, fail: false, calls: [], estimates: 0, receipt: [] };
+const state = { userId: "test-user", limited: false, count: 0, fail: false, calls: [], estimates: 0 };
 const client = createClient("https://example.supabase.co", "test-anon-key", {
   accessToken: async () => "test-session-token",
   global: { fetch: async (input, init) => {
@@ -32,16 +32,14 @@ const deps = {
   "@/lib/rate-limit": { rateLimit: () => !state.limited },
   "@/services/gemini": {
     geminiEstimateShelfLife: async () => { state.estimates++; return { expiry_date: "2027-01-01", confidence: "low", basis: "Test estimate" }; },
-    geminiExtractReceipt: async () => ({ items: state.receipt, warnings: [], detected_count: state.receipt.length, omitted_count: 0 }),
   },
 };
 const original = Module._load;
 Module._load = function (id, ...rest) { return Object.hasOwn(deps, id) ? deps[id] : original.call(this, id, ...rest); };
-let exportGET, estimatePOST, receiptPOST;
+let exportGET, estimatePOST;
 try {
   ({ GET: exportGET } = require("../app/api/items/export/route.ts"));
   ({ POST: estimatePOST } = require("../app/api/estimate/route.ts"));
-  ({ POST: receiptPOST } = require("../app/api/receipt/route.ts"));
 } finally { Module._load = original; }
 
 const exportRequest = () => new Request("http://localhost/api/items/export?q=Milk&location=Fridge&sort=name");
@@ -124,13 +122,3 @@ test("expiry estimate validation and medicine guard", async (t) => {
   });
 });
 
-test("receipt extraction leaves medicine expiry blank for printed-date confirmation", async () => {
-  state.receipt = [{ name: "Tablets", category: "medicine", expiry_date: "2028-10-27", quantity: 1 }, { name: "Milk", category: "food", expiry_date: "2026-11-03", quantity: 1 }];
-  const body = new FormData();
-  body.append("file", new File([new Uint8Array(10)], "receipt.jpg", { type: "image/jpeg" }));
-  const response = await receiptPOST(new Request("http://localhost/api/receipt", { method: "POST", body }));
-  const { items } = await response.json();
-  assert.equal(items[0].expiry_date, null);
-  // Known products get the shelf-life table date (fresh milk: 3 days), not the model guess.
-  assert.equal(items[1].expiry_date, "2026-10-30");
-});

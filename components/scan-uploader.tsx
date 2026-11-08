@@ -9,6 +9,21 @@ import { ScanRejected } from "@/components/scan-rejected";
 import { ImageCapture } from "@/components/image-capture";
 import { Button } from "@/components/ui/button";
 
+type ScanResponse = { extraction?: Extraction; source?: string; rejected?: boolean; detected?: string | null };
+
+/** Mobile networks drop uploads; one automatic retry saves the user from re-taking the photo. */
+async function scanWithRetry(body: FormData): Promise<ScanResponse> {
+  const started = Date.now();
+  try {
+    return await fetchJson<ScanResponse>("/api/scan", { method: "POST", body, signal: AbortSignal.timeout(65_000) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    // Retry a dropped connection, not a slow scan that already used most of its time.
+    if (!/network/i.test(message) || Date.now() - started > 20_000) throw err;
+    return fetchJson<ScanResponse>("/api/scan", { method: "POST", body, signal: AbortSignal.timeout(65_000) });
+  }
+}
+
 export function ScanUploader({ onExtracted }: {
   onExtracted: (extraction: Extraction, file: File) => void;
 }) {
@@ -26,19 +41,7 @@ export function ScanUploader({ onExtracted }: {
     try {
       const body = new FormData();
       body.append("file", target);
-      // Respect the user's OCR-engine preference (Settings): "ai" (default) or "tesseract".
-      let engine = "ai";
-      try {
-        if (localStorage.getItem("ocrEngine") === "tesseract") engine = "tesseract";
-      } catch {
-        /* ignore */
-      }
-      const json = await fetchJson<{
-        extraction?: Extraction;
-        source?: string;
-        rejected?: boolean;
-        detected?: string | null;
-      }>(`/api/scan?engine=${engine}`, { method: "POST", body });
+      const json = await scanWithRetry(body);
       // The user may have left this screen while the photo was being read.
       if (!alive.current) return;
       if (json.rejected) {

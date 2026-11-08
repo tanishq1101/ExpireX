@@ -2,7 +2,7 @@ import { readJson } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { geminiEstimateShelfLife } from "@/services/gemini";
-import { estimateShelfLifeLocal, storageFromLocation, type Storage } from "@/lib/shelf-life";
+import { describeShelfRows, estimateShelfLifeLocal, retrieveShelfLife, storageFromLocation, type Storage } from "@/lib/shelf-life";
 import { categorySchema, dateString } from "@/lib/validators";
 import { rateLimit } from "@/lib/rate-limit";
 import { addDays, todayKolkata } from "@/lib/dates";
@@ -62,9 +62,12 @@ export async function POST(request: Request) {
   if (local.expiry_date && local.confidence === "high") return NextResponse.json({ ...local, source: "guide" });
 
   try {
+    // Retrieval-augmented: ground the model in the closest curated entries, not free recall.
+    const retrieved = retrieveShelfLife(name, category, hints);
     const ai = await geminiEstimateShelfLife(name, category, baseDate, {
       storage,
-      reference: local.expiry_date && local.basis ? local.basis : null,
+      reference: local.expiry_date && local.basis && local.confidence !== "low" ? local.basis : null,
+      references: retrieved.length ? describeShelfRows(retrieved) : null,
     });
     if (ai.expiry_date && ai.expiry_date >= baseDate && ai.expiry_date <= addDays(baseDate, MAX_ESTIMATE_DAYS)) {
       return NextResponse.json({

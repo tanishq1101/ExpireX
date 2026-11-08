@@ -4,6 +4,7 @@ import { verifyWebhook } from '@clerk/nextjs/webhooks';
 import { createAdminClient } from '@/services/supabase/admin';
 import { cleanupAccount } from '@/lib/account-cleanup';
 import { boundedBody } from '@/lib/request-body';
+import { forgetAccount } from '@/lib/account-cache';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 export async function POST(request: Request) {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     event = await verifyWebhook(new NextRequest(request.url, { method: 'POST', headers: request.headers, body }));
   } catch { return new Response('Invalid webhook', { status: 400 }); }
   if (event.type === 'user.deleted' && event.data.id) {
-    try { await cleanupAccount(createAdminClient(), event.data.id); }
+    try { await cleanupAccount(createAdminClient(), event.data.id); forgetAccount(event.data.id); }
     catch { return new Response('Cleanup incomplete. Retry this event.', { status: 503 }); }
   }
   if ((event.type === 'user.created' || event.type === 'user.updated') && event.data.id) {
@@ -25,6 +26,8 @@ export async function POST(request: Request) {
       const email = primary?.verification?.status === 'verified' ? primary.emailAddress : '';
       const { error } = await createAdminClient().rpc('sync_account', { p_user_id: user.id, p_email: email, p_updated_at: user.updatedAt });
       if (error) return new Response('Sync failed. Retry this event.', { status: 503 });
+      // Pages cache the account state; refresh it so a newly verified email shows at once.
+      forgetAccount(user.id);
     } catch { return new Response('Sync unavailable. Retry this event.', { status: 503 }); }
   }
   return new Response('OK');
