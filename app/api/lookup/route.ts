@@ -5,6 +5,7 @@ import { createAdminClient } from "@/services/supabase/admin";
 import { rateLimit } from "@/lib/rate-limit";
 import { estimateShelfLifeLocal } from "@/lib/shelf-life";
 import { todayKolkata } from "@/lib/dates";
+import { cleanProductName, composeProductName } from "@/lib/product-name";
 import type { ProductLookup } from "@/lib/validators";
 import type { Category } from "@/types/database";
 
@@ -26,8 +27,7 @@ function withEstimate(product: ProductLookup) {
   if (!product.found || !product.name || product.supported === false) return product;
   const category = (product.category ?? "food") as Category;
   if (category === "medicine") return product;
-  const name = product.brand && !product.name.toLowerCase().includes(product.brand.toLowerCase())
-    ? `${product.brand} ${product.name}` : product.name;
+  const name = composeProductName(product.name, product.brand);
   const est = estimateShelfLifeLocal(name, category, todayKolkata(), { hints: product.tags ?? [] });
   if (!est.expiry_date || est.confidence !== "high") return product;
   return {
@@ -69,7 +69,8 @@ export async function GET(request: Request) {
       return NextResponse.json(withEstimate({
         found: true,
         barcode,
-        name: cached.name,
+        // Older catalog rows were stored with raw listing titles.
+        name: cleanProductName(cached.name),
         brand: cached.brand ?? null,
         size: cached.size ?? null,
         category: (cached.category as Category | null) ?? null,

@@ -10,6 +10,7 @@ import { saveItem } from "@/lib/save-item";
 import { cn, externalImageUrl } from "@/lib/utils";
 import { MAX_ORIGINAL_BYTES, MAX_UPLOAD_BYTES, prepareImage } from "@/lib/image-resize";
 import { fetchJson } from "@/lib/fetch-json";
+import { composeProductName } from "@/lib/product-name";
 import { addDays, formatDate, todayKolkata } from "@/lib/dates";
 import { estimateShelfLifeLocal, openedDaysFor, storageFromLocation, STORAGE_LABEL, type Storage } from "@/lib/shelf-life";
 import { categorySchema, dateString, itemFormSchema, type Extraction, type ShelfLife } from "@/lib/validators";
@@ -151,9 +152,7 @@ export function ItemForm({
   function handleScanFill(ex: Extraction, scanned: File) {
     if (ex.expiry_date) { setExpiry(ex.expiry_date); setExpirySource(ex.estimated ? "estimated" : "printed"); }
     if (!name.trim() && ex.product_name) {
-      setName(ex.brand && !ex.product_name.toLowerCase().includes(ex.brand.toLowerCase())
-        ? `${ex.brand} ${ex.product_name}`
-        : ex.product_name);
+      setName(composeProductName(ex.product_name, ex.brand));
     }
     if (!initial.category && ex.category) setCategory(ex.category);
     if (!mfg && ex.manufacture_date) setMfg(ex.manufacture_date);
@@ -311,7 +310,7 @@ export function ItemForm({
             alt=""
             className="h-14 w-14 rounded-lg border border-border object-cover"
           />
-          <span className="text-xs text-muted">Attached photo. Reload the page if the preview disappears.</span>
+          <span className="text-xs text-muted">Photo attached</span>
         </div>
       )}
 
@@ -375,9 +374,6 @@ export function ItemForm({
         )}
         {expirySource === "estimated" && (
           <p className="text-sm text-warning">This date is an estimate. Check the packaging before relying on it.</p>
-        )}
-        {expirySource === "unknown" && expiry && (
-          <p className="text-xs text-muted">We don’t know where this date came from. Change it to confirm it.</p>
         )}
         {estimateNote && expirySource === "estimated" && <p className="text-xs text-muted">{estimateNote}</p>}
         {category === "medicine" ? (

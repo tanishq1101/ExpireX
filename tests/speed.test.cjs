@@ -95,3 +95,14 @@ test("a rate-limited or retired model falls through to the next model instead of
   await gemini.geminiExtractFromImage("AAAA", "image/jpeg", "2026-11-08");
   assert.deepEqual(globalThis.__models, ["model-new", "model-old"]);
 });
+
+test("messy database titles become readable names and the pack size moves to quantity", () => {
+  const { composeProductName, parseSize } = require("../lib/product-name.ts");
+  const title = "Nivea All in 1 Facewash 10X Whitening Effect With Cooling Menthol 50 Gram Tube (B00LC2V3F6)";
+  assert.equal(composeProductName(title, "NiveaIndia"), "Nivea All in 1 Facewash 10X Whitening Effect With Cooling Menthol");
+  assert.deepEqual(parseSize(title), { quantity: 50, unit: "g" });
+  assert.equal(composeProductName("MAGGI 2-MINUTE MASALA NOODLES 70G", "Nestle"), "Nestle Maggi 2-Minute Masala Noodles");
+  assert.equal(composeProductName("Lay's Potato Chips", "Lay's"), "Lay's Potato Chips");
+  assert.equal(composeProductName("Amul Butter - 500 g (Pack of 2)", "Amul"), "Amul Butter");
+  assert.deepEqual(parseSize("Dove Shampoo 1.5 L"), { quantity: 1.5, unit: "L" });
+});

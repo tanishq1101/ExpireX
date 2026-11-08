@@ -1,6 +1,7 @@
 import "server-only";
 import type { ProductLookup } from "@/lib/validators";
 import type { Category } from "@/types/database";
+import { cleanProductName, parseSize } from "@/lib/product-name";
 
 // Open Food Facts and its sibling databases are free, key-less and community-run.
 // Querying all three widens coverage: food, cosmetics, and general products.
@@ -38,7 +39,7 @@ function refineCategory(fallback: Category, tags: string[] = []): Category {
 }
 
 function toResult(barcode: string, category: Category, p: OffProduct): ProductLookup | null {
-  const name = (p.product_name_en || p.product_name || "").trim();
+  const name = cleanProductName(p.product_name_en || p.product_name);
   if (!name) return null;
   const resolved = refineCategory(category, p.categories_tags);
   return {
@@ -99,8 +100,10 @@ async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
       items?: { title?: string; brand?: string; category?: string; images?: string[] }[];
     };
     const it = json.items?.[0];
-    const name = (it?.title || "").trim();
+    const title = (it?.title || "").trim();
+    const name = cleanProductName(title);
     if (!name) return null;
+    const size = parseSize(title);
     const catStr = it?.category || "";
     const category = mapUpcCategory(catStr);
     return {
@@ -108,7 +111,7 @@ async function fetchUpcItemDb(barcode: string): Promise<ProductLookup | null> {
       barcode,
       name,
       brand: it?.brand?.trim() || null,
-      size: null,
+      size: size ? `${size.quantity} ${size.unit}` : null,
       category,
       image_url: it?.images?.[0] || null,
       tags: catStr ? catStr.split(/\s*>\s*/).slice(-3) : [],

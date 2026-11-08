@@ -1,14 +1,19 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { accountTag } from "@/lib/account-cache";
-import { clerkClient } from "@clerk/nextjs/server";
+import { createClerkClient } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/services/supabase/admin";
 import { sendWelcomeEmail } from "@/lib/email";
 
 export type AccountState = { email: string; synced: boolean };
 
+// `clerkClient()` reads request headers, which Next forbids inside a cached function (every sync
+// failed that way); a backend client built from the secret key needs no request context.
+let backend: ReturnType<typeof createClerkClient> | null = null;
+const clerk = () => (backend ??= createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }));
+
 async function syncAccount(userId: string): Promise<AccountState> {
-  const user = await (await clerkClient()).users.getUser(userId);
+  const user = await clerk().users.getUser(userId);
   const primary = user.primaryEmailAddress;
   const email = primary?.verification?.status === "verified" ? primary.emailAddress : "";
   const { data, error } = await createAdminClient().rpc("sync_account", {
@@ -17,7 +22,7 @@ async function syncAccount(userId: string): Promise<AccountState> {
     p_updated_at: user.updatedAt,
   });
   // Throwing keeps a failed sync out of the cache, so the next page load tries again.
-  if (error || data !== true) throw new Error("Account sync failed");
+  if (error || data !== true) throw new Error(`Account sync failed: ${error?.message ?? `returned ${String(data)}`}`);
   if (email) {
     // Deduplicated by the delivery key, so a repeat after cache expiry never sends twice.
     try { await sendWelcomeEmail(userId, email, user.firstName ?? undefined); }
@@ -37,7 +42,8 @@ export async function getAccount(userId: string): Promise<AccountState> {
       revalidate: 6 * 60 * 60,
       tags: [accountTag(userId)],
     })();
-  } catch {
+  } catch (err) {
+    console.error("[account] sync failed for", userId, err instanceof Error ? err.message : err);
     return { email: "", synced: false };
   }
 }

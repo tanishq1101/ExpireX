@@ -37,7 +37,7 @@ export function FilterBar({ locations = [] }: { locations?: string[] }) {
           <option value="week">Next 7 days</option>
           <option value="expiring">Expiring soon</option>
           <option value="expired">Expired</option>
-          <option value="ok">OK</option>
+          <option value="ok">Good for now</option>
         </Select>
         <Select name="sort" defaultValue={filters.sort} onChange={(e) => e.currentTarget.form?.requestSubmit()} aria-label="Sort items">
           {Object.entries(INVENTORY_SORTS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}

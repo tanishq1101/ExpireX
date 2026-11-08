@@ -1,17 +1,13 @@
 import type { Extraction } from "./validators";
 import type { ItemFormInitial } from "@/components/item-form";
+import { composeProductName } from "./product-name";
 
 /** Map an AI extraction (photo OCR) into form prefill values. Fills as much as possible. */
 export function initialFromExtraction(
   ex: Extraction,
   extra?: Partial<ItemFormInitial>
 ): { initial: ItemFormInitial; notice?: string } {
-  const brand = ex.brand?.trim();
-  const pname = ex.product_name?.trim() ?? "";
-  const name =
-    brand && pname && !pname.toLowerCase().includes(brand.toLowerCase())
-      ? `${brand} ${pname}`
-      : pname;
+  const name = composeProductName(ex.product_name, ex.brand);
 
   // Freshness verdict for fresh unpackaged perishables (meat/egg/produce), judged from the photo.
   const FRESHNESS_LABEL = {

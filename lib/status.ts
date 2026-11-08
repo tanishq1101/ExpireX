@@ -26,7 +26,7 @@ export function getStatus(today: string, expiry: string): ItemStatus {
 export const STATUS_META: Record<ItemStatus, { label: string; tone: string }> = {
   expired: { label: "Expired", tone: "text-danger border-danger/40 bg-danger/10" },
   expiring: { label: "Expiring soon", tone: "text-warning border-warning/40 bg-warning/10" },
-  ok: { label: "OK", tone: "text-success border-success/40 bg-success/10" },
+  ok: { label: "Good", tone: "text-success border-success/40 bg-success/10" },
 };
 
 export const CATEGORIES = [

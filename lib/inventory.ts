@@ -5,9 +5,9 @@ import { EXPIRING_WINDOW_DAYS } from "./status";
 
 export const PAGE_SIZE = 24;
 export const INVENTORY_SORTS = {
-  expiry: "Expiry: soonest first",
-  newest: "Recently added",
-  name: "Name: A–Z",
+  expiry: "Soonest expiry",
+  newest: "Newest first",
+  name: "Name A–Z",
 } as const;
 
 export type InventoryParams = Partial<Record<"q" | "category" | "status" | "location" | "sort" | "page", string | string[]>>;

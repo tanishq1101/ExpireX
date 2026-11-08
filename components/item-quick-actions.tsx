@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, PackageOpen, ShoppingCart } from "lucide-react";
+import { CheckCircle2, Loader2, PackageOpen, ShoppingCart, Trash2 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useSupabaseClient } from "@/services/supabase/client";
 import { removeUnreferencedImage } from "@/lib/storage";
@@ -17,7 +17,7 @@ type QuickItem = Pick<Item, "id" | "name" | "category" | "quantity" | "unit" | "
  * The two things people actually do with an item after adding it, one tap each:
  * mark it opened (the reminder moves to the "use within" date) or finish it.
  */
-export function ItemQuickActions({ item, openDays }: { item: QuickItem; openDays: number | null }) {
+export function ItemQuickActions({ item, openDays, expired = false }: { item: QuickItem; openDays: number | null; expired?: boolean }) {
   const router = useRouter();
   const supabase = useSupabaseClient();
   const { userId } = useAuth();
@@ -62,7 +62,7 @@ export function ItemQuickActions({ item, openDays }: { item: QuickItem; openDays
       const { error } = await supabase.from("items").delete().eq("id", item.id);
       if (error) throw new Error(rebuy ? "Added to your list, but the item could not be removed." : "Could not remove the item.");
       if (item.image_url) await removeUnreferencedImage(supabase, item.image_url).catch(() => {});
-      toast.success(rebuy ? "Done — added to your shopping list" : "Nice — marked as used up");
+      toast.success(rebuy ? "Done — added to your shopping list" : expired ? "Removed" : "Nice — marked as used up");
       router.push(rebuy ? "/shopping" : "/items");
       router.refresh();
     } catch (err) {
@@ -72,20 +72,20 @@ export function ItemQuickActions({ item, openDays }: { item: QuickItem; openDays
   }
 
   return (
-    <section aria-label="Quick actions" className="grid gap-2 sm:grid-cols-3">
-      {!item.opened_date && item.category !== "documents" && item.category !== "warranty" && item.category !== "subscription" && (
+    <section aria-label="Quick actions" className="grid gap-2 sm:auto-cols-fr sm:grid-flow-col">
+      {!expired && !item.opened_date && item.category !== "documents" && item.category !== "warranty" && item.category !== "subscription" && (
         <Button variant="outline" onClick={markOpened} disabled={!!busy}>
           {busy === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageOpen className="h-4 w-4" />}
           Opened today
         </Button>
       )}
       <Button variant="outline" onClick={() => finish(false)} disabled={!!busy}>
-        {busy === "used" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-        Used it up
+        {busy === "used" ? <Loader2 className="h-4 w-4 animate-spin" /> : expired ? <Trash2 className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+        {expired ? "Threw it out" : "Used it up"}
       </Button>
       <Button onClick={() => finish(true)} disabled={!!busy}>
         {busy === "rebuy" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-        Used up · buy again
+        {expired ? "Remove · buy again" : "Used up · buy again"}
       </Button>
     </section>
   );

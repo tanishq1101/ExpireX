@@ -10,6 +10,7 @@ import { fetchJson } from "@/lib/fetch-json";
 import { anotherBatch } from "@/lib/batch";
 import type { Item } from "@/types/database";
 import { initialFromExtraction } from "@/lib/extraction";
+import { composeProductName, parseSize } from "@/lib/product-name";
 import type { ItemFormInitial } from "@/components/item-form";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import { ScanUploader } from "@/components/scan-uploader";
@@ -126,9 +127,9 @@ export function BarcodeAdd({
     // Build the form prefill from product identity (dates come later from AI/OCR/manual).
     const initial: ItemFormInitial = { barcode };
     if (product.found && product.name) {
-      const nm = product.name;
-      const br = product.brand;
-      initial.name = br && !nm.toLowerCase().includes(br.toLowerCase()) ? `${br} ${nm}` : nm;
+      initial.name = composeProductName(product.name, product.brand);
+      const size = parseSize(product.size);
+      if (size) { initial.quantity = size.quantity; initial.unit = size.unit; }
       if (product.category) initial.category = product.category;
       if (product.image_url) initial.image_url = product.image_url;
     }
